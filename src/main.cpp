@@ -1,5 +1,5 @@
 #include <Arduino.h>
-#include <BleMouse.h>
+#include "./BleMouse.h"
 #include <AS5600.h>
 #include <Wire.h>
 #include "driver/temp_sensor.h"
@@ -7,7 +7,8 @@
 
 const unsigned long HEARTBEAT_INTERVAL = 100; // ms
 const unsigned long ENCODER_READ_INTERVAL = 50; // ms
-
+const unsigned int RESOLUTION_MULTIPLIER = 4; // Higher values = more sensitive scrolling
+const float BASE_DEGREES_PER_SCROLL = 15.0; // Degrees of rotation per scroll step
 
 BleMouse bleMouse("ESP32-C3 Scroll Mouse", "ESP32", 69);
 AS5600 as5600(&Wire);
@@ -18,6 +19,8 @@ float lastAngle = 0;
 float currentAngle = 0;
 bool encoderInitialized = false;
 float totalRotation = 0; // Track total rotation for better precision
+
+bool bleSetupCompleted = false;
 
 
 void reportLog(){
@@ -32,9 +35,7 @@ void reportLog(){
         Serial.print(result);    
         Serial.print("°C");
 
-        
-
-          // Encoder
+        // Encoder
         if (encoderInitialized) {
             currentAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
             Serial.print(" | Encoder: ");
@@ -42,7 +43,7 @@ void reportLog(){
             Serial.print("°");
         } else {
             Serial.print(" | Encoder: OFF");
-        }   
+        }
 
         Serial.println();
 }
@@ -63,6 +64,15 @@ void initTempSensor(){
 void initBLE(){
     bleMouse.begin();
     Serial.println("✓ BLE Mouse service started");
+}
+
+void setupBLE(){
+    if (bleMouse.isConnected()) {
+        bleSetupCompleted = true;
+        //bleMouse.setResolutionMultiplier(RESOLUTION_MULTIPLIER);
+        //Serial.print("✓ Resolution multiplier set to ");
+        //Serial.println(RESOLUTION_MULTIPLIER);
+    }
 }
 
 void initEncoder() {
@@ -101,18 +111,24 @@ void tryReadAndSendScrollCommands() {
     
     totalRotation += angleDiff;
     
-    float degreesPerScroll = 15.0;
+    // Calculate effective degrees per scroll with resolution multiplier
+    float effectiveDegreesPerScroll = BASE_DEGREES_PER_SCROLL / RESOLUTION_MULTIPLIER;
     
-    if (abs(totalRotation) >= degreesPerScroll) {
-        int scrollSteps = (int)(totalRotation / degreesPerScroll);
-        
-        // positive = scroll up, negative = scroll down
+    if (abs(totalRotation) >= effectiveDegreesPerScroll) {
+        // Calculate high-resolution scroll steps (16-bit range)
+        float scrollStepsFloat = totalRotation / effectiveDegreesPerScroll;
+        int16_t scrollSteps = (int16_t)(scrollStepsFloat * RESOLUTION_MULTIPLIER);
+          // Send high-resolution scroll command
         if (scrollSteps != 0) {
-            bleMouse.move(0, 0, scrollSteps);
+            //bleMouse.move(0,0,scrollSteps);
             
-            totalRotation -= (scrollSteps * degreesPerScroll);
+            totalRotation -= (scrollStepsFloat * effectiveDegreesPerScroll);
             
-            Serial.println(scrollSteps > 0 ? "Info: Scrolling UP" : "Info: Scrolling DOWN");
+            Serial.print(scrollSteps > 0 ? "Info: High-res Scrolling UP " : "Info: High-res Scrolling DOWN ");
+            Serial.print(abs(scrollSteps));
+            Serial.print(" units (");
+            Serial.print(effectiveDegreesPerScroll, 2);
+            Serial.println("° per unit)");
         }
     }
     
@@ -131,14 +147,20 @@ void loop()
 {
     unsigned long currentTime = millis();
     
+    if(!bleSetupCompleted){
+        setupBLE();
+    }
+
     if (currentTime - lastHeartbeat >= HEARTBEAT_INTERVAL) {
         lastHeartbeat = currentTime;
         reportLog();
     }
 
-    if(currentTime - lastEncoderRead >= ENCODER_READ_INTERVAL){
+    if(currentTime - lastEncoderRead >= ENCODER_READ_INTERVAL && bleMouse.isConnected() && encoderInitialized) {
         lastEncoderRead = currentTime;
         //tryReadAndSendScrollCommands();
+        bleMouse.scroll(16);
+        Serial.println("Info: Simulated scroll command sent (16 units)");
     }
     
     delay(10); // Small delay to prevent overwhelming the system
