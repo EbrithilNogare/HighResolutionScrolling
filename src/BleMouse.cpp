@@ -23,30 +23,48 @@ static const uint8_t _hidReportDescriptor[] = {
   USAGE_PAGE(1),       0x01, // USAGE_PAGE (Generic Desktop)
   USAGE(1),            0x02, // USAGE (Mouse)
   COLLECTION(1),       0x01, // COLLECTION (Application)
-  USAGE(1),            0x01, //   USAGE (Pointer)
-  COLLECTION(1),       0x00, //   COLLECTION (Physical)
-  // ------------------------------------------------- Padding
-  REPORT_SIZE(1),      0x08, //     REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x01, //     REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //     INPUT (Constant, Variable, Absolute) ;8 bit padding
-  // ------------------------------------------------- Padding
-  REPORT_SIZE(1),      0x08, //     REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x01, //     REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //     INPUT (Constant, Variable, Absolute) ;8 bit padding
-  // ------------------------------------------------- Wheel
-  USAGE_PAGE(1),       0x01, //     USAGE_PAGE (Generic Desktop)
-  USAGE(1),            0x38, //     USAGE (Wheel)
-  LOGICAL_MINIMUM(1),  0x81, //     LOGICAL_MINIMUM (-127)
-  LOGICAL_MAXIMUM(1),  0x7f, //     LOGICAL_MAXIMUM (127)
-  REPORT_SIZE(1),      0x08, //     REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x03, //     REPORT_COUNT (1)
-  HIDINPUT(1),         0x06, //     INPUT (Data, Variable, Relative) ; 1 byte (Wheel)
-  // ------------------------------------------------- Horizontal wheel
-  REPORT_SIZE(1),      0x08, //     REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x01, //     REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //     INPUT (Constant, Variable, Absolute) ;8 bit padding
-  END_COLLECTION(0),         //   END_COLLECTION
-  END_COLLECTION(0)          // END_COLLECTION
+  USAGE_PAGE(1),       0x01, //   USAGE_PAGE (Generic Desktop)
+  USAGE(1),            0x02, //   USAGE (Mouse)
+  COLLECTION(1),       0x02, //   COLLECTION (Logical)
+  REPORT_ID(1),        0x01, //     REPORT_ID (1)
+  USAGE(1),            0x01, //     USAGE (Pointer)
+  COLLECTION(1),       0x00, //     COLLECTION (Physical)
+  // --------------------------------------------------- Padding
+  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
+  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
+  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ;8 bit padding
+  // --------------------------  ----------------------- Padding
+  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
+  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
+  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ;8 bit padding
+  // --------------------------------------------------- Resolution Multiplier
+  COLLECTION(1),       0x02, //       COLLECTION (Logical)
+  REPORT_ID(1),        0x02, //         REPORT_ID (2)
+  USAGE(1),            0x48, //         USAGE (Resolution Multiplier)
+  REPORT_COUNT(1),     0x01, //         REPORT_COUNT (1)
+  REPORT_SIZE(1),      0x02, //         REPORT_SIZE (2)
+  LOGICAL_MINIMUM(1),  0x00, //         LOGICAL_MINIMUM (0)
+  LOGICAL_MAXIMUM(1),  0x01, //         LOGICAL_MAXIMUM (1)
+  PHYSICAL_MINIMUM(1), 0x01, //         PHYSICAL_MINIMUM (1)
+  PHYSICAL_MAXIMUM(1), 0x04, //         PHYSICAL_MAXIMUM (4)
+  FEATURE(1),          0x02, //         FEATURE (Var)
+  // --------------------------------------------------- Wheel
+  REPORT_ID(1),        0x01, //         REPORT_ID (1)
+  USAGE(1),            0x38, //         USAGE (Wheel)
+  PHYSICAL_MINIMUM(1), 0x00, //         PHYSICAL_MINIMUM (0)
+  PHYSICAL_MAXIMUM(1), 0x00, //         PHYSICAL_MAXIMUM (0)
+  LOGICAL_MINIMUM(1),  0x81, //         LOGICAL_MINIMUM (-127)
+  LOGICAL_MAXIMUM(1),  0x7f, //         LOGICAL_MAXIMUM (127)
+  REPORT_SIZE(1),      0x08, //         REPORT_SIZE (8)
+  HIDINPUT(1),         0x06, //         INPUT (Data, Variable, Relative)
+  END_COLLECTION(0),         //       END_COLLECTION (Logical)
+  // --------------------------------------------------- Horizontal wheel
+  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
+  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
+  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ;8 bit padding
+  END_COLLECTION(0),         //     END_COLLECTION (Physical)
+  END_COLLECTION(0),         //   END_COLLECTION (Logical)
+  END_COLLECTION(0),         // END_COLLECTION (Application)
 };
 
 BleMouse::BleMouse(std::string deviceName, std::string deviceManufacturer, uint8_t batteryLevel) : 
@@ -98,7 +116,7 @@ void BleMouse::taskServer(void* pvParameter) {
   pServer->setCallbacks(bleMouseInstance->connectionStatus);
 
   bleMouseInstance->hid = new BLEHIDDevice(pServer);
-  bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(0); // <-- input REPORTID from report map
+  bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(1); // <-- input REPORTID from report map
   bleMouseInstance->connectionStatus->inputMouse = bleMouseInstance->inputMouse;
 
   bleMouseInstance->hid->manufacturer()->setValue(bleMouseInstance->deviceManufacturer);
