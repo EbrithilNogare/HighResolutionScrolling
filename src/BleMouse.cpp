@@ -42,12 +42,12 @@ static const uint8_t _hidReportDescriptor[] = {
   REPORT_ID(1),        0x02, //         REPORT_ID (2)
   USAGE(1),            0x48, //         USAGE (Resolution Multiplier)
   REPORT_COUNT(1),     0x01, //         REPORT_COUNT (1)
-  REPORT_SIZE(1),      0x02, //         REPORT_SIZE (2)
+  REPORT_SIZE(1),      0x04, //         REPORT_SIZE (4)
   LOGICAL_MINIMUM(1),  0x00, //         LOGICAL_MINIMUM (0)
-  LOGICAL_MAXIMUM(1),  0x01, //         LOGICAL_MAXIMUM (1)
+  LOGICAL_MAXIMUM(1),  0x0f, //         LOGICAL_MAXIMUM (15)
   PHYSICAL_MINIMUM(1), 0x01, //         PHYSICAL_MINIMUM (1)
-  PHYSICAL_MAXIMUM(1), 0x04, //         PHYSICAL_MAXIMUM (4)
-  FEATURE(1),          0x02, //         FEATURE (Var)
+  PHYSICAL_MAXIMUM(1), 0x10, //         PHYSICAL_MAXIMUM (16)
+  FEATURE(1),          0x06, //         FEATURE (Data, Var, Abs)
   // --------------------------------------------------- Wheel
   REPORT_ID(1),        0x01, //         REPORT_ID (1)
   USAGE(1),            0x38, //         USAGE (Wheel)
@@ -99,6 +99,19 @@ void BleMouse::scroll(signed char wheel)
   }
 }
 
+void BleMouse::setResolutionMultiplier(uint8_t multiplier)
+{
+  if (this->isConnected() && this->featureResolution)
+  {
+    if (multiplier < 1) multiplier = 1;
+    if (multiplier > 16) multiplier = 16;
+    
+    uint8_t featureValue = multiplier - 1; // 0-15 range
+    this->featureResolution->setValue(&featureValue, 1);
+    ESP_LOGD(LOG_TAG, "Resolution multiplier set to %d", multiplier);
+  }
+}
+
 bool BleMouse::isConnected(void) {
   return this->connectionStatus->connected;
 }
@@ -114,9 +127,11 @@ void BleMouse::taskServer(void* pvParameter) {
   BLEDevice::init(bleMouseInstance->deviceName);
   BLEServer *pServer = BLEDevice::createServer();
   pServer->setCallbacks(bleMouseInstance->connectionStatus);
+  
 
   bleMouseInstance->hid = new BLEHIDDevice(pServer);
   bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(1); // <-- input REPORTID from report map
+  bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(2); // <-- feature REPORTID for resolution multiplier
   bleMouseInstance->connectionStatus->inputMouse = bleMouseInstance->inputMouse;
 
   bleMouseInstance->hid->manufacturer()->setValue(bleMouseInstance->deviceManufacturer);

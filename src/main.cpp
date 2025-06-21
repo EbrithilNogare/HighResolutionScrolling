@@ -69,9 +69,9 @@ void initBLE(){
 void setupBLE(){
     if (bleMouse.isConnected()) {
         bleSetupCompleted = true;
-        //bleMouse.setResolutionMultiplier(RESOLUTION_MULTIPLIER);
-        //Serial.print("✓ Resolution multiplier set to ");
-        //Serial.println(RESOLUTION_MULTIPLIER);
+        bleMouse.setResolutionMultiplier(RESOLUTION_MULTIPLIER);
+        Serial.print("✓ Resolution multiplier set to ");
+        Serial.println(RESOLUTION_MULTIPLIER);
     }
 }
 
@@ -94,45 +94,6 @@ void initEncoder() {
         Serial.println("       - VCC to 3.3V");
         Serial.println("       - GND to GND");
     }
-}
-
-void tryReadAndSendScrollCommands() {
-    if (!bleMouse.isConnected() || !encoderInitialized)
-        return;
-    
-    currentAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-    float angleDiff = currentAngle - lastAngle;
-    
-    if (angleDiff > 180) {
-        angleDiff -= 360;
-    } else if (angleDiff < -180) {
-        angleDiff += 360;
-    }
-    
-    totalRotation += angleDiff;
-    
-    // Calculate effective degrees per scroll with resolution multiplier
-    float effectiveDegreesPerScroll = BASE_DEGREES_PER_SCROLL / RESOLUTION_MULTIPLIER;
-    
-    if (abs(totalRotation) >= effectiveDegreesPerScroll) {
-        // Calculate high-resolution scroll steps (16-bit range)
-        float scrollStepsFloat = totalRotation / effectiveDegreesPerScroll;
-        int16_t scrollSteps = (int16_t)(scrollStepsFloat * RESOLUTION_MULTIPLIER);
-          // Send high-resolution scroll command
-        if (scrollSteps != 0) {
-            //bleMouse.move(0,0,scrollSteps);
-            
-            totalRotation -= (scrollStepsFloat * effectiveDegreesPerScroll);
-            
-            Serial.print(scrollSteps > 0 ? "Info: High-res Scrolling UP " : "Info: High-res Scrolling DOWN ");
-            Serial.print(abs(scrollSteps));
-            Serial.print(" units (");
-            Serial.print(effectiveDegreesPerScroll, 2);
-            Serial.println("° per unit)");
-        }
-    }
-    
-    lastAngle = currentAngle;
 }
 
 void setup()
@@ -158,7 +119,6 @@ void loop()
 
     if(currentTime - lastEncoderRead >= ENCODER_READ_INTERVAL && bleMouse.isConnected() && encoderInitialized) {
         lastEncoderRead = currentTime;
-        //tryReadAndSendScrollCommands();
         bleMouse.scroll(16);
         Serial.println("Info: Simulated scroll command sent (16 units)");
     }
