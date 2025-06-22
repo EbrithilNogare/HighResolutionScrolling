@@ -5,8 +5,8 @@
 #include "driver/temp_sensor.h"
 
 
-const unsigned long HEARTBEAT_INTERVAL = 100; // ms
-const unsigned long ENCODER_READ_INTERVAL = 500; // ms
+const unsigned long HEARTBEAT_INTERVAL = 500; // ms
+const unsigned long ENCODER_READ_INTERVAL = 16; // ms
 const unsigned int RESOLUTION_MULTIPLIER = 4; // Higher values = more sensitive scrolling
 const float BASE_DEGREES_PER_SCROLL = 15.0; // Degrees of rotation per scroll step
 
@@ -101,8 +101,8 @@ void loop()
     
     if(currentTime - lastEncoderRead >= ENCODER_READ_INTERVAL && bleMouse.isConnected() && encoderInitialized) {
         lastEncoderRead = currentTime;
-        bleMouse.scroll(1); // keep this testing setup
-        Serial.println("Info: Simulated scroll command sent (16 units)");
+        bleMouse.scroll(2); // keep this testing setup
+        Serial.println("Info: Simulated scroll command sent (1 units)");
     }
 
     if (currentTime - lastHeartbeat >= HEARTBEAT_INTERVAL) {
@@ -110,5 +110,5 @@ void loop()
         reportLog();
     }
     
-    delay(10); // Small delay to prevent overwhelming the system
+    delay(5); // Small delay to prevent overwhelming the system
 }

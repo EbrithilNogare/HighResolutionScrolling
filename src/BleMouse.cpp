@@ -29,10 +29,6 @@ static const uint8_t _hidReportDescriptor[] = {
   REPORT_ID(1),        0x01, //     REPORT_ID (1)
   USAGE(1),            0x01, //     USAGE (Pointer)
   COLLECTION(1),       0x00, //     COLLECTION (Physical)
-  // ------------------------------------------------- Padding
-  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ; padding
   // ------------------------------------------------- X/Y position
   USAGE_PAGE(1),       0x01, //       USAGE_PAGE (Generic Desktop)
   USAGE(1),            0x30, //       USAGE (X)
@@ -51,11 +47,6 @@ static const uint8_t _hidReportDescriptor[] = {
   REPORT_SIZE(1),      0x08, //         REPORT_SIZE (8)
   REPORT_COUNT(1),     0x01, //         REPORT_COUNT (1)
   HIDINPUT(1),         0x06, //         INPUT (Data, Variable, Relative)
-  // ------------------------------------------------- Padding
-  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ; padding
-
   // ------------------------------------------------- Resolution Multiplier
   USAGE_PAGE(1),       0x01,        // Generic Desktop
   USAGE(1),            0x48,        //   Usage: Resolution Multiplier (0x48):contentReference[oaicite:3]{index=3}
@@ -94,13 +85,11 @@ void BleMouse::scroll(signed char wheel)
 {
   if (this->isConnected())
   {
-    uint8_t m[5];
-    m[0] = 0; // buttons
-    m[1] = 0; // X
-    m[2] = 0; // Y
-    m[3] = wheel; // vertical wheel
-    m[4] = 0; // horizontal wheel
-    this->inputMouse->setValue(m, 5);
+    uint8_t m[3];
+    m[0] = 0; // X
+    m[1] = 0; // Y
+    m[2] = wheel; // vertical wheel
+    this->inputMouse->setValue(m, 3);
     this->inputMouse->notify();
   }
 }
