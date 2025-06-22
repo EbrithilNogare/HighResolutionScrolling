@@ -39,25 +39,24 @@ static const uint8_t _hidReportDescriptor[] = {
   REPORT_COUNT(1),     0x02, //       REPORT_COUNT (2)
   HIDINPUT(1),         0x06, //       INPUT (Data, Variable, Relative) ;3 bytes (X,Y,Wheel)
   // --------------------------------------------------- Wheel
-  USAGE(1),            0x38, //         USAGE (Wheel)
-  PHYSICAL_MINIMUM(1), 0x00, //         PHYSICAL_MINIMUM (0)
-  PHYSICAL_MAXIMUM(1), 0x00, //         PHYSICAL_MAXIMUM (0)
-  LOGICAL_MINIMUM(1),  0x81, //         LOGICAL_MINIMUM (-127)
-  LOGICAL_MAXIMUM(1),  0x7f, //         LOGICAL_MAXIMUM (127)
-  REPORT_SIZE(1),      0x08, //         REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x01, //         REPORT_COUNT (1)
-  HIDINPUT(1),         0x06, //         INPUT (Data, Variable, Relative)
+  USAGE(1),            0x38, //       USAGE (Wheel)
+  PHYSICAL_MINIMUM(1), 0x00, //       PHYSICAL_MINIMUM (0)
+  PHYSICAL_MAXIMUM(1), 0x00, //       PHYSICAL_MAXIMUM (0)
+  LOGICAL_MINIMUM(1),  0x81, //       LOGICAL_MINIMUM (-127)
+  LOGICAL_MAXIMUM(1),  0x7f, //       LOGICAL_MAXIMUM (127)
+  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
+  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
+  HIDINPUT(1),         0x06, //       INPUT (Data, Variable, Relative)
   // ------------------------------------------------- Resolution Multiplier
-  USAGE_PAGE(1),       0x01,        // Generic Desktop
-  USAGE(1),            0x48,        //   Usage: Resolution Multiplier (0x48):contentReference[oaicite:3]{index=3}
-  LOGICAL_MINIMUM(1),  0x00,        //   Logical Min = 0
-  LOGICAL_MAXIMUM(1),  0x01,        //   Logical Max = 1
-  PHYSICAL_MINIMUM(1), 0x01,        //   Physical Min = 1 (actual multiplier for bit=0)
-  PHYSICAL_MAXIMUM(1), 0x80,        //   Physical Max = 4 (actual multiplier for bit=1, e.g. x4):contentReference[oaicite:4]{index=4}  REPORT_SIZE(1),      0x02,        //   Field is 2 bits
-  REPORT_SIZE(1),      0x08,        //   8 bits
-  REPORT_COUNT(1),     0x01,        //   1 field
-  FEATURE(1),          0x02,        //   Feature (Data,Var,Abs)
-
+  USAGE_PAGE(1),       0x01, //       Generic Desktop
+  USAGE(1),            0x48, //       Usage: Resolution Multiplier
+  LOGICAL_MINIMUM(1),  0x00, //       Logical Min = 0
+  LOGICAL_MAXIMUM(1),  0x01, //       Logical Max = 1
+  PHYSICAL_MINIMUM(1), 0x01, //       Physical Min = 1
+  PHYSICAL_MAXIMUM(1), 0x80, //       Physical Max = 128
+  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
+  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
+  FEATURE(1),          0x02, //       Feature (Data,Var,Abs)
   END_COLLECTION(0),         //     END_COLLECTION (Physical)
   END_COLLECTION(0),         //   END_COLLECTION (Logical)
   END_COLLECTION(0),         // END_COLLECTION (Application)
