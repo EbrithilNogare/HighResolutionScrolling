@@ -6,7 +6,7 @@
 
 
 const unsigned long HEARTBEAT_INTERVAL = 500; // ms
-const unsigned long ENCODER_READ_INTERVAL = 16; // ms
+const unsigned long ENCODER_READ_INTERVAL = 30; // ms
 const unsigned int RESOLUTION_MULTIPLIER = 4; // Higher values = more sensitive scrolling
 const float BASE_DEGREES_PER_SCROLL = 15.0; // Degrees of rotation per scroll step
 
@@ -110,5 +110,5 @@ void loop()
         reportLog();
     }
     
-    delay(5); // Small delay to prevent overwhelming the system
+    delay(10); // Small delay to prevent overwhelming the system
 }
