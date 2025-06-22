@@ -29,43 +29,48 @@ static const uint8_t _hidReportDescriptor[] = {
   REPORT_ID(1),        0x01, //     REPORT_ID (1)
   USAGE(1),            0x01, //     USAGE (Pointer)
   COLLECTION(1),       0x00, //     COLLECTION (Physical)
-  // --------------------------------------------------- Padding
+  // ------------------------------------------------- Padding
   REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
   REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ;8 bit padding
-  // --------------------------  ----------------------- Padding
+  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ; padding
+  // ------------------------------------------------- X/Y position
+  USAGE_PAGE(1),       0x01, //       USAGE_PAGE (Generic Desktop)
+  USAGE(1),            0x30, //       USAGE (X)
+  USAGE(1),            0x31, //       USAGE (Y)
+  LOGICAL_MINIMUM(1),  0x81, //       LOGICAL_MINIMUM (-127)
+  LOGICAL_MAXIMUM(1),  0x7f, //       LOGICAL_MAXIMUM (127)
   REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
-  REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ;8 bit padding
-  // --------------------------------------------------- Resolution Multiplier
+  REPORT_COUNT(1),     0x02, //       REPORT_COUNT (2)
+  HIDINPUT(1),         0x06, //       INPUT (Data, Variable, Relative) ;3 bytes (X,Y,Wheel)
+  // ------------------------------------------------- Wheel with Resolution Multiplier
   COLLECTION(1),       0x02, //       COLLECTION (Logical)
-  REPORT_ID(1),        0x02, //         REPORT_ID (2)
-  USAGE(1),            0x48, //         USAGE (Resolution Multiplier)
-  REPORT_COUNT(1),     0x01, //         REPORT_COUNT (1)
-  REPORT_SIZE(1),      0x04, //         REPORT_SIZE (4)
-  LOGICAL_MINIMUM(1),  0x00, //         LOGICAL_MINIMUM (0)
-  LOGICAL_MAXIMUM(1),  0x0f, //         LOGICAL_MAXIMUM (15)
-  PHYSICAL_MINIMUM(1), 0x01, //         PHYSICAL_MINIMUM (1)
-  PHYSICAL_MAXIMUM(1), 0x10, //         PHYSICAL_MAXIMUM (16)
-  FEATURE(1),          0x06, //         FEATURE (Data, Var, Abs)
+  //USAGE(1),            0x48, //         USAGE (Resolution Multiplier)
+  //REPORT_COUNT(1),     0x01, //         REPORT_COUNT (1)
+  //REPORT_SIZE(1),      0x04, //         REPORT_SIZE (4)
+  //LOGICAL_MINIMUM(1),  0x00, //         LOGICAL_MINIMUM (0)
+  //LOGICAL_MAXIMUM(1),  0x0f, //         LOGICAL_MAXIMUM (15)
+  //PHYSICAL_MINIMUM(1), 0x01, //         PHYSICAL_MINIMUM (1)
+  //PHYSICAL_MAXIMUM(1), 0x10, //         PHYSICAL_MAXIMUM (16)
+  //FEATURE(1),          0x06, //         FEATURE (Data, Var, Abs)
   // --------------------------------------------------- Wheel
-  REPORT_ID(1),        0x01, //         REPORT_ID (1)
   USAGE(1),            0x38, //         USAGE (Wheel)
   PHYSICAL_MINIMUM(1), 0x00, //         PHYSICAL_MINIMUM (0)
   PHYSICAL_MAXIMUM(1), 0x00, //         PHYSICAL_MAXIMUM (0)
   LOGICAL_MINIMUM(1),  0x81, //         LOGICAL_MINIMUM (-127)
   LOGICAL_MAXIMUM(1),  0x7f, //         LOGICAL_MAXIMUM (127)
   REPORT_SIZE(1),      0x08, //         REPORT_SIZE (8)
+  REPORT_COUNT(1),     0x01, //         REPORT_COUNT (1)
   HIDINPUT(1),         0x06, //         INPUT (Data, Variable, Relative)
   END_COLLECTION(0),         //       END_COLLECTION (Logical)
-  // --------------------------------------------------- Horizontal wheel
+  // ------------------------------------------------- Padding
   REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
   REPORT_COUNT(1),     0x01, //       REPORT_COUNT (1)
-  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ;8 bit padding
+  HIDINPUT(1),         0x03, //       INPUT (Constant, Variable, Absolute) ; padding
   END_COLLECTION(0),         //     END_COLLECTION (Physical)
   END_COLLECTION(0),         //   END_COLLECTION (Logical)
   END_COLLECTION(0),         // END_COLLECTION (Application)
 };
+
 
 BleMouse::BleMouse(std::string deviceName, std::string deviceManufacturer, uint8_t batteryLevel) : 
     _buttons(0),
@@ -89,27 +94,34 @@ void BleMouse::scroll(signed char wheel)
   if (this->isConnected())
   {
     uint8_t m[5];
-    m[0] = 0;
-    m[1] = 0;
-    m[2] = 0;
-    m[3] = wheel;
-    m[4] = 0;
+    m[0] = 0; // buttons
+    m[1] = 0; // X
+    m[2] = 0; // Y
+    m[3] = wheel; // vertical wheel
+    m[4] = 0; // horizontal wheel
     this->inputMouse->setValue(m, 5);
     this->inputMouse->notify();
   }
 }
 
-void BleMouse::setResolutionMultiplier(uint8_t multiplier)
+void BleMouse::setResolutionMultiplier(uint8_t multiplier, std::string* output)
 {
-  if (this->isConnected() && this->featureResolution)
-  {
-    if (multiplier < 1) multiplier = 1;
-    if (multiplier > 16) multiplier = 16;
-    
-    uint8_t featureValue = multiplier - 1; // 0-15 range
-    this->featureResolution->setValue(&featureValue, 1);
-    ESP_LOGD(LOG_TAG, "Resolution multiplier set to %d", multiplier);
-  }
+  return;
+  
+  if (!this->isConnected() || !this->featureResolution) return;
+
+  // clamp 1..16
+  multiplier = multiplier < 1 ? 1 : (multiplier > 16 ? 16 : multiplier);
+  uint8_t featureValue = multiplier - 1;  // 0..15
+
+  uint8_t report[1];
+  report[1] = 0x04;   // the 4bit value (0–15) fits in one byte
+
+  // send the feature report
+  this->featureResolution->setValue(report, 1);
+  ESP_LOGD(LOG_TAG, "Sent Resolution Multiplier feature report = %u", multiplier);
+
+  *output = "Feature report send";
 }
 
 bool BleMouse::isConnected(void) {
@@ -130,10 +142,15 @@ void BleMouse::taskServer(void* pvParameter) {
   
 
   bleMouseInstance->hid = new BLEHIDDevice(pServer);
-  bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(1); // <-- input REPORTID from report map
-  bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(2); // <-- feature REPORTID for resolution multiplier
+  bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(0x01); // <-- input REPORTID from report map
+  //bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(0x02); // <-- feature REPORTID for resolution multiplier
   bleMouseInstance->connectionStatus->inputMouse = bleMouseInstance->inputMouse;
+  
+  //uint8_t report[1];
+  //report[1] = 0x04;
+  //bleMouseInstance->featureResolution->setValue(report, 1);
 
+  
   bleMouseInstance->hid->manufacturer()->setValue(bleMouseInstance->deviceManufacturer);
 
   bleMouseInstance->hid->pnp(0x02, 0xe502, 0xa111, 0x0210);

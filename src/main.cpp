@@ -6,7 +6,7 @@
 
 
 const unsigned long HEARTBEAT_INTERVAL = 100; // ms
-const unsigned long ENCODER_READ_INTERVAL = 50; // ms
+const unsigned long ENCODER_READ_INTERVAL = 1000; // ms
 const unsigned int RESOLUTION_MULTIPLIER = 4; // Higher values = more sensitive scrolling
 const float BASE_DEGREES_PER_SCROLL = 15.0; // Degrees of rotation per scroll step
 
@@ -69,9 +69,11 @@ void initBLE(){
 void setupBLE(){
     if (bleMouse.isConnected()) {
         bleSetupCompleted = true;
-        bleMouse.setResolutionMultiplier(RESOLUTION_MULTIPLIER);
+        std::string output = "Nothing";
+        bleMouse.setResolutionMultiplier(RESOLUTION_MULTIPLIER, &output);
         Serial.print("✓ Resolution multiplier set to ");
         Serial.println(RESOLUTION_MULTIPLIER);
+        Serial.println(output.c_str());
     }
 }
 
@@ -112,15 +114,15 @@ void loop()
         setupBLE();
     }
 
+    if(currentTime - lastEncoderRead >= ENCODER_READ_INTERVAL && bleMouse.isConnected() && encoderInitialized) {
+        lastEncoderRead = currentTime;
+        bleMouse.scroll(1);
+        Serial.println("Info: Simulated scroll command sent (16 units)");
+    }
+
     if (currentTime - lastHeartbeat >= HEARTBEAT_INTERVAL) {
         lastHeartbeat = currentTime;
         reportLog();
-    }
-
-    if(currentTime - lastEncoderRead >= ENCODER_READ_INTERVAL && bleMouse.isConnected() && encoderInitialized) {
-        lastEncoderRead = currentTime;
-        bleMouse.scroll(16);
-        Serial.println("Info: Simulated scroll command sent (16 units)");
     }
     
     delay(10); // Small delay to prevent overwhelming the system
