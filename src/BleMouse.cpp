@@ -128,13 +128,13 @@ void BleMouse::taskServer(void* pvParameter) {
 
   bleMouseInstance->hid = new BLEHIDDevice(pServer);
   bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(0x01); // <-- input REPORTID from report map
-  //bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(0x02); // <-- feature REPORTID for resolution multiplier
+  bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(0x01); // <-- feature REPORTID for resolution multiplier
   bleMouseInstance->connectionStatus->inputMouse = bleMouseInstance->inputMouse;
   
 
-  //uint8_t report[1];
-  //report[1] = 0x04;
-  //bleMouseInstance->featureResolution->setValue(report, 1);
+  uint8_t report[1];
+  report[1] = 0x04;
+  bleMouseInstance->featureResolution->setValue(report, 1);
 
 
   
