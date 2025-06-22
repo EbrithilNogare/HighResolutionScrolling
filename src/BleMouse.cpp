@@ -62,14 +62,10 @@ static const uint8_t _hidReportDescriptor[] = {
   LOGICAL_MINIMUM(1),  0x00,        //   Logical Min = 0
   LOGICAL_MAXIMUM(1),  0x01,        //   Logical Max = 1
   PHYSICAL_MINIMUM(1), 0x01,        //   Physical Min = 1 (actual multiplier for bit=0)
-  PHYSICAL_MAXIMUM(1), 0x04,        //   Physical Max = 4 (actual multiplier for bit=1, e.g. x4):contentReference[oaicite:4]{index=4}  REPORT_SIZE(1),      0x02,        //   Field is 2 bits
-  REPORT_SIZE(1),      0x02,        //   2 bits
+  PHYSICAL_MAXIMUM(1), 0x80,        //   Physical Max = 4 (actual multiplier for bit=1, e.g. x4):contentReference[oaicite:4]{index=4}  REPORT_SIZE(1),      0x02,        //   Field is 2 bits
+  REPORT_SIZE(1),      0x08,        //   8 bits
   REPORT_COUNT(1),     0x01,        //   1 field
   FEATURE(1),          0x02,        //   Feature (Data,Var,Abs)
-  // ------------------------------------------------- Feature Padding
-  REPORT_SIZE(1),      0x06,        //   6 bits padding
-  REPORT_COUNT(1),     0x01,        //   1 field
-  FEATURE(1),          0x03,        //   Feature (Constant) - padding to byte align
 
   END_COLLECTION(0),         //     END_COLLECTION (Physical)
   END_COLLECTION(0),         //   END_COLLECTION (Logical)
@@ -131,12 +127,7 @@ void BleMouse::taskServer(void* pvParameter) {
   bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(0x01); // <-- feature REPORTID for resolution multiplier
   bleMouseInstance->connectionStatus->inputMouse = bleMouseInstance->inputMouse;
   
-
-  uint8_t report[1];
-  report[1] = 0x04;
-  bleMouseInstance->featureResolution->setValue(report, 1);
-
-
+  bleMouseInstance->featureResolution->setValue(new uint8_t{0x80}, 1);
   
   bleMouseInstance->hid->manufacturer()->setValue(bleMouseInstance->deviceManufacturer);
 
