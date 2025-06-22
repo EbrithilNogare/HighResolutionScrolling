@@ -31,7 +31,6 @@ public:
   void scroll(signed char wheel);
   bool isConnected(void);
   void setBatteryLevel(uint8_t level);
-  void setResolutionMultiplier(uint8_t multiplier, std::string* output);
   uint8_t batteryLevel;
   std::string deviceManufacturer;
   std::string deviceName;
