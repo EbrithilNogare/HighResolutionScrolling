@@ -18,14 +18,14 @@ const float BATTERY_HIGH_VOLTAGE = 4.2;
 
 // timers
 const unsigned long STATUS_REPORT_INTERVAL_MS = 1000;
-const unsigned long ENCODER_READ_INTERVAL_MS = 16;
+const unsigned long ENCODER_READ_INTERVAL_MS = 16; // ble interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
 const unsigned long BATTERY_CHECK_INTERVAL_MS = 5000; // todo rise this number
 const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 60000;
 const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 1000;
 const unsigned long INACTIVITY_LIGHT_SLEEP_MS = 50000;
 
-BleMouse bleMouse("Wheelie", "ESP32 - Nogare build", 69);
+BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare", 69);
 AS5600 as5600(&Wire);
 
 unsigned long lastStatusReportTimeMs = 0;
@@ -149,7 +149,7 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     }
 
     float rawScrollSteps = angleDifferenceInDegrees / DEGREES_PER_SCROLL_STEP * SCROLL_RESOLUTION_MULTIPLIER;
-    signed char scrollSteps = static_cast<signed char>(min(max(rawScrollSteps, -127.0f), 127.0f));
+    signed short scrollSteps = static_cast<signed short>(min(max(rawScrollSteps, -32767.0f), 32767.0f));
     
     if (abs(scrollSteps) > 1) {
         previousEncoderAngle += (scrollSteps / SCROLL_RESOLUTION_MULTIPLIER) * DEGREES_PER_SCROLL_STEP;
@@ -190,7 +190,9 @@ void handleInactivityBasedSleep(unsigned long currentTimeMs) {
 void checkBatteryStatus(unsigned long currentTimeMs)
 {
     uint8_t batteryLevel = currentTimeMs % 100; // Simulated battery level
-    bleMouse.setBatteryLevel(batteryLevel);
+
+    if(bleMouse.isConnected())
+        bleMouse.setBatteryLevel(batteryLevel);
 }
 
 void setup() {

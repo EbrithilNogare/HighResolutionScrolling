@@ -28,7 +28,7 @@ public:
   BleMouse(std::string deviceName = "ESP32 Bluetooth Mouse", std::string deviceManufacturer = "Espressif", uint8_t batteryLevel = 100);
   void begin(void);
   void end(void);
-  void scroll(signed char wheel);
+  void scroll(signed short wheel);
   bool isConnected(void);
   void setBatteryLevel(uint8_t level);
   uint8_t batteryLevel;
