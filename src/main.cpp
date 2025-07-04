@@ -68,9 +68,7 @@ void initializeSerialCommunication() {
     Serial.begin(115200);
     delay(100);
 
-    #if LOGGING_ON
-        Serial.println("✓ Serial communication started");
-    #endif
+    Serial.println("✓ Serial communication started");
 }
 
 void initializeTemperatureSensor() {
@@ -196,7 +194,10 @@ void checkBatteryStatus(unsigned long currentTimeMs)
 }
 
 void setup() {
-    initializeSerialCommunication();
+    #if LOGGING_ON
+        initializeSerialCommunication();
+    #endif
+    
     initializeTemperatureSensor();
     initializeEncoder();
     initializeBluetoothMouse();
