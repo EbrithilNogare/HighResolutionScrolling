@@ -17,7 +17,7 @@ Connect the AS5600 to your ESP32-C3 as follows:
 | GND        | GND          | Ground                               |
 | SCL        | GPIO7        | I2C Clock (default for XIAO ESP32C3) |
 | SDA        | GPIO6        | I2C Data (default for XIAO ESP32C3)  |
-| DIR        | GPIO4        | Direction pin (optional)             |
+| DIR        | GPIO4        | Direction pin                        |
 
 ## Features
 
