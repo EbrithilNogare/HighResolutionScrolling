@@ -9,7 +9,7 @@
 
 // settings
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
-const float DEGREES_PER_SCROLL_STEP = 90.0;
+const float DEGREES_PER_SCROLL_STEP = 9.0;
 
 // config
 const float BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0;
@@ -20,7 +20,7 @@ const float BATTERY_HIGH_VOLTAGE = 4.2;
 const unsigned long STATUS_REPORT_INTERVAL_MS = 1000;
 const unsigned long ENCODER_READ_INTERVAL_MS = 16; // ble interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
-const unsigned long BATTERY_CHECK_INTERVAL_MS = 5000; // todo rise this number
+const unsigned long BATTERY_CHECK_INTERVAL_MS = 10000; // todo rise this number
 const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 60000;
 const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 1000;
 const unsigned long INACTIVITY_LIGHT_SLEEP_MS = 50000;
@@ -62,6 +62,14 @@ void reportDeviceStatus() {
     }
 
     Serial.println();
+}
+
+void Log2DGraph()
+{
+    Serial.print('#');
+    Serial.print(as5600.readAngle() * AS5600_RAW_TO_DEGREES);
+    Serial.print(' ');
+    Serial.println(as5600.readMagnitude());
 }
 
 void initializeSerialCommunication() {
@@ -140,6 +148,11 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
     float angleDifferenceInDegrees = currentEncoderAngle - previousEncoderAngle;
 
+    if(abs(angleDifferenceInDegrees) > 360){
+        previousEncoderAngle = currentEncoderAngle;
+        return; // often getting number 5000 out of this
+    }
+
     if (angleDifferenceInDegrees > 180) {
         angleDifferenceInDegrees -= 360;
     } else if (angleDifferenceInDegrees < -180) {
@@ -151,11 +164,7 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     
     if (abs(scrollSteps) > 1) {
         previousEncoderAngle += (scrollSteps / SCROLL_RESOLUTION_MULTIPLIER) * DEGREES_PER_SCROLL_STEP;
-    } else {
-        previousEncoderAngle = currentEncoderAngle;
-    }
 
-    if (abs(scrollSteps) > 1) {
         lastScrollEventTimeMs = currentTimeMs;
         bleMouse.scroll(scrollSteps);
 
@@ -218,6 +227,7 @@ void loop() {
             lastStatusReportTimeMs = currentTimeMs;
             reportDeviceStatus();
         }
+        //Log2DGraph();
     #endif
     
     if (currentTimeMs - lastEncoderReadTimeMs >= ENCODER_READ_INTERVAL_MS && bleMouse.isConnected() && isEncoderInitialized) {
@@ -239,5 +249,5 @@ void loop() {
 
     
 
-    delay(3);
+    delay(ENCODER_READ_INTERVAL_MS);
 }
