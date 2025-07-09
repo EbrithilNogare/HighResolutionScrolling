@@ -2,6 +2,8 @@
 
 An ESP32-C3 based Bluetooth mouse that uses an AS5600 magnetic encoder for high-resolution scrolling.
 
+![](https://github.com/user-attachments/assets/1cda570d-2695-4311-adfa-4bde7830b25f)
+
 ## Hardware
 
 - **ESP32-C3 Board**: [Seeed Studio XIAO ESP32C3](https://www.aliexpress.com/item/1005005382287176.html)
