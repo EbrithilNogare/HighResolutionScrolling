@@ -9,21 +9,21 @@
 
 // settings
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
-const float DEGREES_PER_SCROLL_STEP = 9.0;
+const float DEGREES_PER_SCROLL_STEP = -9.0;
 
 // config
 const float BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0;
 const float BATTERY_LOW_VOLTAGE = 3.0;
 const float BATTERY_HIGH_VOLTAGE = 4.2;
+const int SERIAL_SPEED = 115200;
 
 // timers
 const unsigned long STATUS_REPORT_INTERVAL_MS = 1000;
 const unsigned long ENCODER_READ_INTERVAL_MS = 16; // ble interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
-const unsigned long BATTERY_CHECK_INTERVAL_MS = 10000; // todo rise this number
-const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 60000;
-const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 1000;
-const unsigned long INACTIVITY_LIGHT_SLEEP_MS = 50000;
+const unsigned long BATTERY_CHECK_INTERVAL_MS = 60 * 1000; // todo rise this number
+const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 500;
+const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 30 * 1000;
 
 BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare", 69);
 AS5600 as5600(&Wire);
@@ -33,10 +33,8 @@ unsigned long lastEncoderReadTimeMs = 0;
 unsigned long lastBleConnectionCheckTimeMs = 0;
 unsigned long lastSuccessfulBleConnectionTimeMs = 0;
 unsigned long lastScrollEventTimeMs = 0;
-unsigned long lastAngleChangeTimeMs = 0;
 float previousEncoderAngle = 0;
 float currentEncoderAngle = 0;
-float lastInactiveAngle = 0;
 bool isEncoderInitialized = false;
 bool isAdvertising = false;
 
@@ -73,7 +71,7 @@ void Log2DGraph()
 }
 
 void initializeSerialCommunication() {
-    Serial.begin(115200);
+    Serial.begin(SERIAL_SPEED);
     delay(100);
 
     Serial.println("✓ Serial communication started");
@@ -111,6 +109,7 @@ void initializeEncoder() {
     if (as5600.isConnected()) {
         isEncoderInitialized = true;
         currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
+        previousEncoderAngle = currentEncoderAngle;
     }
 
     #if LOGGING_ON
@@ -166,6 +165,7 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
         previousEncoderAngle += (scrollSteps / SCROLL_RESOLUTION_MULTIPLIER) * DEGREES_PER_SCROLL_STEP;
 
         lastScrollEventTimeMs = currentTimeMs;
+
         bleMouse.scroll(scrollSteps);
 
         #if LOGGING_ON
@@ -175,23 +175,36 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     }
 }
 
-void handleInactivityBasedSleep(unsigned long currentTimeMs) {
-    if (currentTimeMs - lastScrollEventTimeMs >= INACTIVITY_LIGHT_SLEEP_MS) {
-        currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-        float angleDifference = abs(currentEncoderAngle - lastInactiveAngle);
+void handleInactivityBasedSleep(unsigned long now) {
+    if (now - lastScrollEventTimeMs < LIGHT_SLEEP_TIMEOUT_MS)
+        return;
     
-        #if LOGGING_ON
-           Serial.println("Info: Entering light sleep");
-        #endif
+    #if LOGGING_ON
+        Serial.println("Info: Entering light sleep");
+        Serial.flush();
+        Serial.end();
+    #endif
 
-        // esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_WAKE_INTERVAL_MS * 1000);
-        // esp_light_sleep_start(); // not working
+    bleMouse.end();
+    
+    int lastInactiveAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
+    float newAngle;
+    do {
+        esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_WAKE_INTERVAL_MS * 1000);
+        esp_light_sleep_start();
+        newAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
+    } while (abs(newAngle - lastInactiveAngle) < 0.5);
+    
+    #if LOGGING_ON
+        Serial.begin(SERIAL_SPEED);
+        delay(100);
+        Serial.println("Info: Movement detected, resuming full power");
+    #endif
 
-        #if LOGGING_ON
-           Serial.println("Info: Waking up from light sleep");
-        #endif
-
-    }
+    initializeBluetoothMouse();
+    
+    previousEncoderAngle = newAngle;
+    lastScrollEventTimeMs = millis();
 }
 
 void checkBatteryStatus(unsigned long currentTimeMs)
@@ -213,10 +226,6 @@ void setup() {
     
     unsigned long currentTimeMs = millis();
     lastScrollEventTimeMs = currentTimeMs;
-    lastAngleChangeTimeMs = currentTimeMs;
-    if (isEncoderInitialized) {
-        lastInactiveAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-    }
 }
 
 void loop() {
@@ -245,7 +254,7 @@ void loop() {
         checkBatteryStatus(currentTimeMs);
     }
     
-    // handleInactivityBasedSleep(currentTimeMs);
+    handleInactivityBasedSleep(currentTimeMs);
 
     
 

@@ -76,7 +76,9 @@ void BleMouse::begin(void)
   xTaskCreate(this->taskServer, "server", 20000, (void *)this, 5, NULL);
 }
 
-void BleMouse::end(void){}
+void BleMouse::end(void){
+  BLEDevice::deinit();
+}
 
 void BleMouse::scroll(signed short wheel)
 {
