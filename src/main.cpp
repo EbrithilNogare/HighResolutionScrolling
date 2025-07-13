@@ -126,7 +126,7 @@ void initializeEncoder() {
 void handleBleConnectionManagement(unsigned long currentTimeMs) {
     bool isCurrentlyConnected = bleMouse.isConnected();
     
-    if (!isCurrentlyConnected && !isAdvertising) {
+    if (!isCurrentlyConnected) {
         bleMouse.end();
         delay(100);
         bleMouse.begin();
