@@ -5,7 +5,7 @@
 #include "driver/temp_sensor.h"
 #include "esp_sleep.h"
 
-#define LOGGING_ON true
+#define LOGGING_ON false
 
 // settings
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
@@ -39,6 +39,7 @@ bool isEncoderInitialized = false;
 bool isAdvertising = false;
 
 
+#if LOGGING_ON
 void reportDeviceStatus() {
     Serial.print(" | ");
     Serial.print(bleMouse.isConnected() ? "BLE: ON" : "BLE: OFF");
@@ -76,6 +77,8 @@ void initializeSerialCommunication() {
 
     Serial.println("✓ Serial communication started");
 }
+#endif // LOGGING_ON
+
 
 void initializeTemperatureSensor() {
     temp_sensor_config_t temperatureSensorConfig = TSENS_CONFIG_DEFAULT();
