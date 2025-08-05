@@ -7,11 +7,16 @@
 
 #define LOGGING_ON true
 
-// settings
+// Sleep and Power Management Settings
+const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 10 * 1000;
+const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 1 * 1000;
+const unsigned long DEEP_SLEEP_TIMEOUT_MS = 60 * 1000;
+const unsigned long DEEP_SLEEP_WAKE_INTERVAL_MS = 5 * 1000;
+const float ROTATION_CHANGE_THRESHOLD_DEGREES = 5.0;
+
+// Device Configuration
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
 const float DEGREES_PER_SCROLL_STEP = -9.0;
-
-// config
 const float BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0;
 const float BATTERY_LOW_VOLTAGE = 3.0;
 const float BATTERY_HIGH_VOLTAGE = 4.2;
@@ -19,22 +24,25 @@ const int SERIAL_SPEED = 115200;
 const int ENCODER_POWER_PIN = 20;
 const int ENCODER_SCL_PIN = 4;
 
-// timers
+// Operation Intervals
 const unsigned long STATUS_REPORT_INTERVAL_MS = 1000;
-const unsigned long ENCODER_READ_INTERVAL_MS = 16; // ble interval should not be less than 7.5 ms
+const unsigned long ENCODER_READ_INTERVAL_MS = 16; // BLE interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
-const unsigned long BATTERY_CHECK_INTERVAL_MS = 60 * 1000; // todo rise this number
-const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 1000;
-const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 10 * 1000; // todo rise this number
+const unsigned long BATTERY_CHECK_INTERVAL_MS = 60 * 1000;
 
+// Global Objects
 BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare", 69);
 AS5600 as5600(&Wire);
 
+// RTC Memory Storage (persists during deep sleep)
+RTC_DATA_ATTR float rtcLastRotationAngle = 1000.0;
+
+// State Variables
 unsigned long lastStatusReportTimeMs = 0;
 unsigned long lastEncoderReadTimeMs = 0;
 unsigned long lastBleConnectionCheckTimeMs = 0;
 unsigned long lastSuccessfulBleConnectionTimeMs = 0;
-unsigned long lastScrollEventTimeMs = 0;
+unsigned long lastActivityTimeMs = 0;
 float previousEncoderAngle = 0;
 float currentEncoderAngle = 0;
 bool isEncoderInitialized = false;
@@ -81,7 +89,6 @@ void initializeSerialCommunication() {
 }
 #endif // LOGGING_ON
 
-
 void initializeTemperatureSensor() {
     temp_sensor_config_t temperatureSensorConfig = TSENS_CONFIG_DEFAULT();
     temperatureSensorConfig.dac_offset = TSENS_DAC_L2;
@@ -92,6 +99,10 @@ void initializeTemperatureSensor() {
         Serial.println("✓ Temperature sensor initialized");
     #endif
 }
+
+// ========================================
+// Bluetooth Management Functions
+// ========================================
 
 void initializeBluetooth() {
     bleMouse.begin();
@@ -109,41 +120,6 @@ void terminateBluetooth() {
     bleMouse.end();
     isAdvertising = false;
     delay(50);
-}
-
-void initializeEncoder() {
-    digitalWrite(ENCODER_POWER_PIN, HIGH); // power ON
-    delay(1);
-    Wire.begin();
-    delay(2);
-    as5600.begin(ENCODER_SCL_PIN);
-    delay(10);
-    
-    if (as5600.isConnected()) {
-        isEncoderInitialized = true;
-        currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-        previousEncoderAngle = currentEncoderAngle;
-    }
-
-    #if LOGGING_ON
-        if(as5600.isConnected())
-            Serial.println("✓ AS5600 magnetic encoder connected successfully");
-        else
-            Serial.println("Error: AS5600 sensor not found!");
-    #endif
-}
-
-void terminateEncoder(){
-    if (isEncoderInitialized) {
-        isEncoderInitialized = false;
-        Wire.end();
-        digitalWrite(ENCODER_POWER_PIN, LOW); // power OFF
-        delay(1);
-        
-        #if LOGGING_ON
-            Serial.println("✓ AS5600 magnetic encoder terminated");
-        #endif
-    }
 }
 
 void handleBleConnectionManagement(unsigned long currentTimeMs) {
@@ -169,6 +145,56 @@ void handleBleConnectionManagement(unsigned long currentTimeMs) {
     }
 }
 
+// ========================================
+// Encoder Management Functions
+// ========================================
+
+void initializeEncoder() {
+    digitalWrite(ENCODER_POWER_PIN, HIGH); // power ON
+    delay(1);
+    Wire.begin();
+    delay(2);
+    as5600.begin(ENCODER_SCL_PIN);
+    delay(10);
+    
+    if (as5600.isConnected()) {
+        isEncoderInitialized = true;
+        currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
+        
+        float savedAngle = rtcLastRotationAngle;
+        if (savedAngle >= 360.0) { // Check for init value
+            previousEncoderAngle = currentEncoderAngle;
+            rtcLastRotationAngle = currentEncoderAngle;
+        } else {
+            previousEncoderAngle = savedAngle;
+        }
+    }
+
+    #if LOGGING_ON
+        if(as5600.isConnected())
+            Serial.println("✓ AS5600 magnetic encoder connected successfully");
+        else
+            Serial.println("Error: AS5600 sensor not found!");
+    #endif
+}
+
+void terminateEncoder(){
+    if (isEncoderInitialized) {
+        isEncoderInitialized = false;
+        Wire.end();
+        digitalWrite(ENCODER_POWER_PIN, LOW); // power OFF
+        delay(1);
+        
+        #if LOGGING_ON
+            Serial.println("✓ AS5600 magnetic encoder terminated");
+        #endif
+    }
+}
+
+// ========================================
+// Scroll Processing Functions
+// ========================================
+
 void processEncoderScrolling(unsigned long currentTimeMs) {
     currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
     float angleDifferenceInDegrees = currentEncoderAngle - previousEncoderAngle;
@@ -189,40 +215,65 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     
     if (abs(scrollSteps) > 1) {
         previousEncoderAngle += (scrollSteps / SCROLL_RESOLUTION_MULTIPLIER) * DEGREES_PER_SCROLL_STEP;
-        lastScrollEventTimeMs = currentTimeMs;
+        lastActivityTimeMs = currentTimeMs;
 
-        if(bleMouse.isConnected())
+        if(bleMouse.isConnected()){
             bleMouse.scroll(scrollSteps);
-
-        #if LOGGING_ON
+            
+            #if LOGGING_ON
             Serial.print("Info: Scroll command sent: ");
             Serial.println(scrollSteps);
-        #endif
+            #endif
+        }
     }
 }
 
-void handleInactivityBasedSleep(unsigned long now) {
-    if (now - lastScrollEventTimeMs < LIGHT_SLEEP_TIMEOUT_MS)
+// ========================================
+// Power Management Functions
+// ========================================
+
+void handleInactivityBasedSleep(unsigned long currentTimeMs) {
+    if (currentTimeMs - lastActivityTimeMs < LIGHT_SLEEP_TIMEOUT_MS)
         return;
     
     #if LOGGING_ON
-        Serial.println("Info: Entering light sleep");
+        Serial.println("Info: Entering light sleep cycle");
         Serial.flush();
         Serial.end();
     #endif
 
     terminateBluetooth();
     
-    int lastInactiveAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-    float newAngle;
+    unsigned long lightSleepStartTime = millis();
+    float lastInactiveAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
+    rtcLastRotationAngle = lastInactiveAngle;
+    float angleDifference = 0.0;
+    
     do {
-        // Go sleep
+        if ((millis() - (lastActivityTimeMs)) >= DEEP_SLEEP_TIMEOUT_MS) {
+            // Deep sleep
+            terminateEncoder();
+            esp_sleep_enable_timer_wakeup(DEEP_SLEEP_WAKE_INTERVAL_MS * 1000);
+            esp_deep_sleep_start();
+            return;
+        }
+        
+        // Light sleep
         esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_WAKE_INTERVAL_MS * 1000);
         esp_light_sleep_start();
+        
         // Wake up
-        sleep(5);
-        newAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-    } while (abs(newAngle - lastInactiveAngle) < 5.0);
+        delay(5);
+        float newAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
+        angleDifference = abs(newAngle - lastInactiveAngle);
+        
+        if (angleDifference > 180) {
+            angleDifference = 360 - angleDifference;
+        }
+        
+        lastInactiveAngle = newAngle;
+        
+    } while (angleDifference < ROTATION_CHANGE_THRESHOLD_DEGREES);
     
     #if LOGGING_ON
         Serial.begin(SERIAL_SPEED);
@@ -232,9 +283,42 @@ void handleInactivityBasedSleep(unsigned long now) {
 
     initializeBluetooth();
     
-    previousEncoderAngle = newAngle;
-    lastScrollEventTimeMs = millis();
+    previousEncoderAngle = lastInactiveAngle;
+    rtcLastRotationAngle = previousEncoderAngle;
+    lastActivityTimeMs = millis();
 }
+
+void checkRotationAfterWakeup() {
+    #if LOGGING_ON
+        Serial.begin(SERIAL_SPEED);
+        delay(1000);
+        Serial.println("Info: Waking up to check rotation");
+    #endif
+    
+    if (as5600.isConnected()) {
+        float currentAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
+        float savedAngle = rtcLastRotationAngle;
+        float angleDifference = abs(currentAngle - savedAngle);
+        
+        if (angleDifference > 180) {
+            angleDifference = 360 - angleDifference;
+        }
+        
+        if (angleDifference >= ROTATION_CHANGE_THRESHOLD_DEGREES) {
+            previousEncoderAngle = currentAngle;
+            rtcLastRotationAngle = currentAngle;
+            lastActivityTimeMs = millis();
+            return; // Exit function to stay awake
+        }
+    }
+    
+    esp_sleep_enable_timer_wakeup(DEEP_SLEEP_WAKE_INTERVAL_MS * 1000);
+    esp_deep_sleep_start();
+}
+
+// ========================================
+// Utility Functions
+// ========================================
 
 void checkBatteryStatus(unsigned long currentTimeMs)
 {
@@ -244,18 +328,29 @@ void checkBatteryStatus(unsigned long currentTimeMs)
         bleMouse.setBatteryLevel(batteryLevel);
 }
 
+// ========================================
+// Main Setup and Loop Functions
+// ========================================
+
 void setup() {
     #if LOGGING_ON
         initializeSerialCommunication();
     #endif
     
     pinMode(ENCODER_POWER_PIN, OUTPUT);
+
+    initializeEncoder();
+
+    esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
+    if (wakeup_reason == ESP_SLEEP_WAKEUP_TIMER) {
+        checkRotationAfterWakeup();
+        // If we reach here, powering up
+    }
     
     initializeTemperatureSensor();
-    initializeEncoder();
     initializeBluetooth();
     
-    lastScrollEventTimeMs = millis();
+    lastActivityTimeMs = millis();
 }
 
 void loop() {
@@ -285,8 +380,6 @@ void loop() {
     }
     
     handleInactivityBasedSleep(currentTimeMs);
-
-    
 
     delay(ENCODER_READ_INTERVAL_MS);
 }
