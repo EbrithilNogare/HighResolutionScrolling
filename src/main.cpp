@@ -5,7 +5,7 @@
 #include "driver/temp_sensor.h"
 #include "esp_sleep.h"
 
-#define LOGGING_ON false
+#define LOGGING_ON true
 
 // settings
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
@@ -16,14 +16,16 @@ const float BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0;
 const float BATTERY_LOW_VOLTAGE = 3.0;
 const float BATTERY_HIGH_VOLTAGE = 4.2;
 const int SERIAL_SPEED = 115200;
+const int ENCODER_POWER_PIN = 20;
+const int ENCODER_SCL_PIN = 4;
 
 // timers
 const unsigned long STATUS_REPORT_INTERVAL_MS = 1000;
 const unsigned long ENCODER_READ_INTERVAL_MS = 16; // ble interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
 const unsigned long BATTERY_CHECK_INTERVAL_MS = 60 * 1000; // todo rise this number
-const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 500;
-const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 30 * 1000;
+const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 1000;
+const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 10 * 1000; // todo rise this number
 
 BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare", 69);
 AS5600 as5600(&Wire);
@@ -91,7 +93,7 @@ void initializeTemperatureSensor() {
     #endif
 }
 
-void initializeBluetoothMouse() {
+void initializeBluetooth() {
     bleMouse.begin();
 
     isAdvertising = true;
@@ -103,11 +105,19 @@ void initializeBluetoothMouse() {
     #endif
 }
 
+void terminateBluetooth() {
+    bleMouse.end();
+    isAdvertising = false;
+    delay(50);
+}
+
 void initializeEncoder() {
+    digitalWrite(ENCODER_POWER_PIN, HIGH); // power ON
+    delay(1);
     Wire.begin();
-    delay(100);
-    as5600.begin(4);
-    delay(100);
+    delay(2);
+    as5600.begin(ENCODER_SCL_PIN);
+    delay(10);
     
     if (as5600.isConnected()) {
         isEncoderInitialized = true;
@@ -121,6 +131,19 @@ void initializeEncoder() {
         else
             Serial.println("Error: AS5600 sensor not found!");
     #endif
+}
+
+void terminateEncoder(){
+    if (isEncoderInitialized) {
+        isEncoderInitialized = false;
+        Wire.end();
+        digitalWrite(ENCODER_POWER_PIN, LOW); // power OFF
+        delay(1);
+        
+        #if LOGGING_ON
+            Serial.println("✓ AS5600 magnetic encoder terminated");
+        #endif
+    }
 }
 
 void handleBleConnectionManagement(unsigned long currentTimeMs) {
@@ -150,7 +173,7 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
     float angleDifferenceInDegrees = currentEncoderAngle - previousEncoderAngle;
 
-    if(abs(angleDifferenceInDegrees) > 360){
+    if(abs(angleDifferenceInDegrees) >= 180){
         previousEncoderAngle = currentEncoderAngle;
         return; // often getting number 5000 out of this
     }
@@ -166,10 +189,10 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     
     if (abs(scrollSteps) > 1) {
         previousEncoderAngle += (scrollSteps / SCROLL_RESOLUTION_MULTIPLIER) * DEGREES_PER_SCROLL_STEP;
-
         lastScrollEventTimeMs = currentTimeMs;
 
-        bleMouse.scroll(scrollSteps);
+        if(bleMouse.isConnected())
+            bleMouse.scroll(scrollSteps);
 
         #if LOGGING_ON
             Serial.print("Info: Scroll command sent: ");
@@ -188,15 +211,18 @@ void handleInactivityBasedSleep(unsigned long now) {
         Serial.end();
     #endif
 
-    bleMouse.end();
+    terminateBluetooth();
     
     int lastInactiveAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
     float newAngle;
     do {
+        // Go sleep
         esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_WAKE_INTERVAL_MS * 1000);
         esp_light_sleep_start();
+        // Wake up
+        sleep(5);
         newAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-    } while (abs(newAngle - lastInactiveAngle) < 0.5);
+    } while (abs(newAngle - lastInactiveAngle) < 5.0);
     
     #if LOGGING_ON
         Serial.begin(SERIAL_SPEED);
@@ -204,7 +230,7 @@ void handleInactivityBasedSleep(unsigned long now) {
         Serial.println("Info: Movement detected, resuming full power");
     #endif
 
-    initializeBluetoothMouse();
+    initializeBluetooth();
     
     previousEncoderAngle = newAngle;
     lastScrollEventTimeMs = millis();
@@ -223,12 +249,13 @@ void setup() {
         initializeSerialCommunication();
     #endif
     
+    pinMode(ENCODER_POWER_PIN, OUTPUT);
+    
     initializeTemperatureSensor();
     initializeEncoder();
-    initializeBluetoothMouse();
+    initializeBluetooth();
     
-    unsigned long currentTimeMs = millis();
-    lastScrollEventTimeMs = currentTimeMs;
+    lastScrollEventTimeMs = millis();
 }
 
 void loop() {
@@ -242,7 +269,7 @@ void loop() {
         //Log2DGraph();
     #endif
     
-    if (currentTimeMs - lastEncoderReadTimeMs >= ENCODER_READ_INTERVAL_MS && bleMouse.isConnected() && isEncoderInitialized) {
+    if (currentTimeMs - lastEncoderReadTimeMs >= ENCODER_READ_INTERVAL_MS && isEncoderInitialized) {
         lastEncoderReadTimeMs = currentTimeMs;
         processEncoderScrolling(currentTimeMs);
     }
