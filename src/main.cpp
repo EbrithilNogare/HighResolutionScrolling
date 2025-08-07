@@ -5,7 +5,7 @@
 #include "driver/temp_sensor.h"
 #include "esp_sleep.h"
 
-#define LOGGING_ON true
+#define LOGGING_ON false
 
 // Sleep and Power Management Settings
 const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 10 * 1000;
@@ -127,7 +127,7 @@ void handleBleConnectionManagement(unsigned long currentTimeMs) {
     
     if (!isCurrentlyConnected) {
         bleMouse.end();
-        delay(100);
+        delay(50);
         bleMouse.begin();
         isAdvertising = true;
 
@@ -199,15 +199,15 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
     currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
     float angleDifferenceInDegrees = currentEncoderAngle - previousEncoderAngle;
 
-    if(abs(angleDifferenceInDegrees) >= 180){
-        previousEncoderAngle = currentEncoderAngle;
-        return; // often getting number 5000 out of this
-    }
-
     if (angleDifferenceInDegrees > 180) {
         angleDifferenceInDegrees -= 360;
     } else if (angleDifferenceInDegrees < -180) {
         angleDifferenceInDegrees += 360;
+    }
+    
+    if(abs(angleDifferenceInDegrees) >= 180){
+        previousEncoderAngle = currentEncoderAngle;
+        return; // often getting number 5000 out of this
     }
 
     float rawScrollSteps = angleDifferenceInDegrees / DEGREES_PER_SCROLL_STEP * SCROLL_RESOLUTION_MULTIPLIER;
