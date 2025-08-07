@@ -83,7 +83,7 @@ void Log2DGraph()
 
 void initializeSerialCommunication() {
     Serial.begin(SERIAL_SPEED);
-    delay(100);
+    delay(1000);
 
     Serial.println("✓ Serial communication started");
 }
@@ -150,23 +150,25 @@ void handleBleConnectionManagement(unsigned long currentTimeMs) {
 // ========================================
 
 void initializeEncoder() {
+    pinMode(ENCODER_POWER_PIN, OUTPUT);
     digitalWrite(ENCODER_POWER_PIN, HIGH); // power ON
     delay(1);
     Wire.begin();
     delay(2);
-    as5600.begin(ENCODER_SCL_PIN);
+    as5600.begin(AS5600_SW_DIRECTION_PIN);
     delay(10);
     
     if (as5600.isConnected()) {
         isEncoderInitialized = true;
         currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
         
-        float savedAngle = rtcLastRotationAngle;
-        if (savedAngle >= 360.0) { // Check for init value
+        if (rtcLastRotationAngle > 360.0) {
+            // First run
             previousEncoderAngle = currentEncoderAngle;
             rtcLastRotationAngle = currentEncoderAngle;
         } else {
-            previousEncoderAngle = savedAngle;
+            // Deep sleep recovery
+            previousEncoderAngle = rtcLastRotationAngle;
         }
     }
 
@@ -183,7 +185,6 @@ void terminateEncoder(){
         isEncoderInitialized = false;
         Wire.end();
         digitalWrite(ENCODER_POWER_PIN, LOW); // power OFF
-        delay(1);
         
         #if LOGGING_ON
             Serial.println("✓ AS5600 magnetic encoder terminated");
@@ -244,7 +245,6 @@ void handleInactivityBasedSleep(unsigned long currentTimeMs) {
 
     terminateBluetooth();
     
-    unsigned long lightSleepStartTime = millis();
     float lastInactiveAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
     rtcLastRotationAngle = lastInactiveAngle;
     float angleDifference = 0.0;
@@ -263,10 +263,9 @@ void handleInactivityBasedSleep(unsigned long currentTimeMs) {
         esp_light_sleep_start();
         
         // Wake up
-        delay(5);
         float newAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-        angleDifference = abs(newAngle - lastInactiveAngle);
-        
+        angleDifference = newAngle - lastInactiveAngle;
+
         if (angleDifference > 180) {
             angleDifference = 360 - angleDifference;
         }
@@ -290,8 +289,6 @@ void handleInactivityBasedSleep(unsigned long currentTimeMs) {
 
 void checkRotationAfterWakeup() {
     #if LOGGING_ON
-        Serial.begin(SERIAL_SPEED);
-        delay(1000);
         Serial.println("Info: Waking up to check rotation");
     #endif
     
@@ -337,8 +334,6 @@ void setup() {
         initializeSerialCommunication();
     #endif
     
-    pinMode(ENCODER_POWER_PIN, OUTPUT);
-
     initializeEncoder();
 
     esp_sleep_wakeup_cause_t wakeup_reason = esp_sleep_get_wakeup_cause();
@@ -363,7 +358,7 @@ void loop() {
         }
         //Log2DGraph();
     #endif
-    
+
     if (currentTimeMs - lastEncoderReadTimeMs >= ENCODER_READ_INTERVAL_MS && isEncoderInitialized) {
         lastEncoderReadTimeMs = currentTimeMs;
         processEncoderScrolling(currentTimeMs);
