@@ -1,18 +1,18 @@
 #include <Arduino.h>
-#include "./BleMouse.h"
 #include <AS5600.h>
 #include <Wire.h>
 #include "driver/temp_sensor.h"
 #include "esp_sleep.h"
+#include "./BleMouse.h"
 
 #define LOGGING_ON false
 
 // Sleep and Power Management Settings
 const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 10 * 1000;
-const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 1 * 1000;
+const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 500;
 const unsigned long DEEP_SLEEP_TIMEOUT_MS = 60 * 1000;
-const unsigned long DEEP_SLEEP_WAKE_INTERVAL_MS = 5 * 1000;
-const float ROTATION_CHANGE_THRESHOLD_DEGREES = 5.0;
+const unsigned long DEEP_SLEEP_WAKE_INTERVAL_MS = 3 * 1000;
+const float ROTATION_CHANGE_THRESHOLD_DEGREES = 3.0;
 
 // Device Configuration
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
@@ -119,7 +119,7 @@ void initializeBluetooth() {
 void terminateBluetooth() {
     bleMouse.end();
     isAdvertising = false;
-    delay(50);
+    delay(100);
 }
 
 void handleBleConnectionManagement(unsigned long currentTimeMs) {
@@ -152,11 +152,12 @@ void handleBleConnectionManagement(unsigned long currentTimeMs) {
 void initializeEncoder() {
     pinMode(ENCODER_POWER_PIN, OUTPUT);
     digitalWrite(ENCODER_POWER_PIN, HIGH); // power ON
-    delay(1);
     Wire.begin();
-    delay(2);
     as5600.begin(AS5600_SW_DIRECTION_PIN);
-    delay(10);
+    
+    // wait for first register value
+    unsigned long time = millis();
+    while(as5600.isConnected() && as5600.readAngle() == 0 && millis() - time < 10) { }
     
     if (as5600.isConnected()) {
         isEncoderInitialized = true;
@@ -276,7 +277,7 @@ void handleInactivityBasedSleep(unsigned long currentTimeMs) {
     
     #if LOGGING_ON
         Serial.begin(SERIAL_SPEED);
-        delay(100);
+        delay(1000);
         Serial.println("Info: Movement detected, resuming full power");
     #endif
 
