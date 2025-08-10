@@ -33,11 +33,11 @@ static const uint8_t _hidReportDescriptor[] = {
   USAGE_PAGE(1),       0x01, //       USAGE_PAGE (Generic Desktop)
   USAGE(1),            0x30, //       USAGE (X)
   USAGE(1),            0x31, //       USAGE (Y)
-  LOGICAL_MINIMUM(1),  0x81, //       LOGICAL_MINIMUM (-127)
-  LOGICAL_MAXIMUM(1),  0x7f, //       LOGICAL_MAXIMUM (127)
-  REPORT_SIZE(1),      0x08, //       REPORT_SIZE (8)
+  LOGICAL_MINIMUM(1),  0xF8, //       LOGICAL_MINIMUM (-8)
+  LOGICAL_MAXIMUM(1),  0x07, //       LOGICAL_MAXIMUM (7)
+  REPORT_SIZE(1),      0x04, //       REPORT_SIZE (4)
   REPORT_COUNT(1),     0x02, //       REPORT_COUNT (2)
-  HIDINPUT(1),         0x06, //       INPUT (Data, Variable, Relative) ;3 bytes (X,Y,Wheel)
+  HIDINPUT(1),         0x06, //       INPUT (Data, Variable, Relative) ;1 byte (4-bit X, 4-bit Y)
   // --------------------------------------------------- Wheel
   USAGE(1),            0x38, //       USAGE (Wheel)
   LOGICAL_MINIMUM(2),  0x01, 0x80, // LOGICAL_MINIMUM (-32767)
@@ -84,12 +84,11 @@ void BleMouse::scroll(signed short wheel)
 {
   if (this->isConnected())
   {
-    uint8_t m[4];
-    m[0] = 0;                   // X
-    m[1] = 0;                   // Y
-    m[2] = wheel & 0xFF;        // vertical wheel low byte
-    m[3] = (wheel >> 8) & 0xFF; // vertical wheel high byte
-    this->inputMouse->setValue(m, 4);
+    uint8_t m[3];
+    m[0] = 0;                   // X and Y (4-bit each, both 0)
+    m[1] = wheel & 0xFF;        // vertical wheel low byte
+    m[2] = (wheel >> 8) & 0xFF; // vertical wheel high byte
+    this->inputMouse->setValue(m, 3);
     this->inputMouse->notify();
   }
 }
