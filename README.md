@@ -7,13 +7,16 @@ An ESP32-C3 based Bluetooth mouse that uses an AS5600 magnetic encoder for high-
 ## Hardware
 
 - Main parts
-   - **ESP32-C3 Board**: [Seeed Studio XIAO ESP32C3](https://www.aliexpress.com/item/1005005382287176.html)
-   - **Magnetic Encoder**: [AS5600 Module](https://www.aliexpress.com/item/1005009122468349.html)
+  - **ESP32-C3 Board**: [Seeed Studio XIAO ESP32C3](https://www.aliexpress.com/item/1005005382287176.html)
+  - **Magnetic Encoder**: [AS5600 Module](https://www.aliexpress.com/item/1005009122468349.html)
 - Optional parts that I used
-   - [Brass weight (2mm thick, 45mm diameter)](https://www.aliexpress.com/item/1005007804047419.html)
-   - [Ball bearing 45x58x7mm (and cleaned brass)](https://www.aliexpress.com/item/1005007420073930.html)
-   - [LiPo battery (503040, 3.7 V ~500mAh)](https://www.aliexpress.com/item/1005008218024646.html)
-   - [Thermal pad .5 mm](https://www.aliexpress.com/item/32988894487.html)
+  - [Brass weight (2mm thick, 45mm diameter)](https://www.aliexpress.com/item/1005007804047419.html)
+  - [Ball bearing v1 45x58x7mm (and cleaned brass)](https://www.aliexpress.com/item/1005007420073930.html)
+  - [Ceramic ball bearing v2 45x58x7mm](https://www.aliexpress.com/item/32437944825.html)
+  - [LiPo battery (503040, 3.7 V ~500mAh)](https://www.aliexpress.com/item/1005008218024646.html)
+  - [Thermal pad .5 mm](https://www.aliexpress.com/item/32988894487.html)
+  - [Rubber legs](https://www.aliexpress.com/item/1005002478823169.html)
+  - [Any wires that are tuff](https://www.aliexpress.com/item/1005007079142852.html)
 
 ## Wiring
 
@@ -21,11 +24,13 @@ Connect the AS5600 to your ESP32-C3 as follows:
 
 | AS5600 Pin | ESP32-C3 Pin | Description                          |
 | ---------- | ------------ | ------------------------------------ |
-| VCC        | 3V3          | Power supply (3.3V)                  |
+| VCC        | GPIO20       | Power supply (controlled by ESP32)   |
 | GND        | GND          | Ground                               |
 | SCL        | GPIO7        | I2C Clock (default for XIAO ESP32C3) |
 | SDA        | GPIO6        | I2C Data (default for XIAO ESP32C3)  |
 | DIR        | VCC (AS5600) | Direction pin                        |
+
+**Note**: The AS5600 VCC is connected to GPIO20 instead of 3V3 to allow the ESP32 to control power to the encoder for better power management during sleep modes.
 
 ## Usage
 
