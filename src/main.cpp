@@ -26,7 +26,7 @@ const int ENCODER_SCL_PIN = 4;
 
 // Operation Intervals
 const unsigned long STATUS_REPORT_INTERVAL_MS = 1000;
-const unsigned long ENCODER_READ_INTERVAL_MS = 16; // BLE interval should not be less than 7.5 ms
+const unsigned long ENCODER_READ_INTERVAL_MS = 15; // BLE interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
 const unsigned long BATTERY_CHECK_INTERVAL_MS = 60 * 1000;
 
@@ -127,7 +127,7 @@ void handleBleConnectionManagement(unsigned long currentTimeMs) {
     
     if (!isCurrentlyConnected) {
         bleMouse.end();
-        delay(50);
+        delay(100);
         bleMouse.begin();
         isAdvertising = true;
 
