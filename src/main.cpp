@@ -8,15 +8,13 @@
 #define LOGGING_ON false
 
 // Sleep and Power Management Settings
-const unsigned long LIGHT_SLEEP_TIMEOUT_MS = 60 * 1000;
-const unsigned long LIGHT_SLEEP_WAKE_INTERVAL_MS = 500;
-const unsigned long DEEP_SLEEP_TIMEOUT_MS = 120 * 1000;
+const unsigned long DEEP_SLEEP_TIMEOUT_MS = 60 * 1000;
 const unsigned long DEEP_SLEEP_WAKE_INTERVAL_MS = 3 * 1000;
 const float ROTATION_CHANGE_THRESHOLD_DEGREES = 3.0;
 
 // Device Configuration
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
-const float DEGREES_PER_SCROLL_STEP = -8.0;
+const float DEGREES_PER_SCROLL_STEP = -9.0;
 const float BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0;
 const float BATTERY_LOW_VOLTAGE = 3.0;
 const float BATTERY_HIGH_VOLTAGE = 4.2;
@@ -43,12 +41,10 @@ unsigned long lastEncoderReadTimeMs = 0;
 unsigned long lastBleConnectionCheckTimeMs = 0;
 unsigned long lastSuccessfulBleConnectionTimeMs = 0;
 unsigned long lastActivityTimeMs = 0;
-unsigned long wakeUpTimeMs = 0;
 float previousEncoderAngle = 0;
 float currentEncoderAngle = 0;
 bool isEncoderInitialized = false;
 bool isAdvertising = false;
-bool justWokeFromSleep = false;
 
 
 #if LOGGING_ON
@@ -127,8 +123,7 @@ void terminateBluetooth() {
 void handleBleConnectionManagement(unsigned long currentTimeMs) {
     bool isCurrentlyConnected = bleMouse.isConnected();
     
-    if (!isCurrentlyConnected && !isAdvertising) {
-        // Force restart BLE if not connected and not advertising
+    if (!isCurrentlyConnected) {
         bleMouse.end();
         delay(100);
         bleMouse.begin();
@@ -138,26 +133,9 @@ void handleBleConnectionManagement(unsigned long currentTimeMs) {
             Serial.println("Info: Starting BLE advertising");
         #endif
     }
-    
-    if (!isCurrentlyConnected && isAdvertising) {
-        // Already advertising but still not connected, try to refresh
-        static unsigned long lastRestartTime = 0;
-        if (currentTimeMs - lastRestartTime > 10000) { // Restart every 10 seconds if still not connected
-            bleMouse.end();
-            delay(100);
-            bleMouse.begin();
-            lastRestartTime = currentTimeMs;
-            
-            #if LOGGING_ON
-                Serial.println("Info: Restarting BLE advertising");
-            #endif
-        }
-    }
 
     if(isCurrentlyConnected && isAdvertising) {
         isAdvertising = false;
-        lastSuccessfulBleConnectionTimeMs = currentTimeMs;
-        justWokeFromSleep = false;  // Reset the flag once connected
         
         #if LOGGING_ON
            Serial.println("Info: BLE connection established");
@@ -232,18 +210,18 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
         return; // often getting number 5000 out of this
     }
 
-    float rawScrollSteps = angleDifferenceInDegrees * SCROLL_RESOLUTION_MULTIPLIER / DEGREES_PER_SCROLL_STEP;
+    float rawScrollSteps = angleDifferenceInDegrees / DEGREES_PER_SCROLL_STEP * SCROLL_RESOLUTION_MULTIPLIER;
     signed short scrollSteps = static_cast<signed short>(min(max(rawScrollSteps, -32767.0f), 32767.0f));
     
     if (abs(scrollSteps) > 1) {
-        previousEncoderAngle += scrollSteps * DEGREES_PER_SCROLL_STEP / SCROLL_RESOLUTION_MULTIPLIER;
+        previousEncoderAngle += (scrollSteps / SCROLL_RESOLUTION_MULTIPLIER) * DEGREES_PER_SCROLL_STEP;
         lastActivityTimeMs = currentTimeMs;
 
         if(bleMouse.isConnected()){
             bleMouse.scroll(scrollSteps);
             
             #if LOGGING_ON
-            Serial.print("Info: Scrolled ");
+            Serial.print("Info: Scroll command sent: ");
             Serial.println(scrollSteps);
             #endif
         }
@@ -255,63 +233,22 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
 // ========================================
 
 void handleInactivityBasedSleep(unsigned long currentTimeMs) {
-    if (currentTimeMs - lastActivityTimeMs < LIGHT_SLEEP_TIMEOUT_MS)
+    if (currentTimeMs - lastActivityTimeMs < DEEP_SLEEP_TIMEOUT_MS)
         return;
     
     #if LOGGING_ON
-        Serial.println("Info: Entering light sleep cycle");
+        Serial.println("Info: Entering deep sleep");
         Serial.flush();
         Serial.end();
     #endif
 
     terminateBluetooth();
+    terminateEncoder();
     
-    float lastInactiveAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-    rtcLastRotationAngle = lastInactiveAngle;
-    float angleDifference = 0.0;
-    
-    do {
-        if ((millis() - (lastActivityTimeMs)) >= DEEP_SLEEP_TIMEOUT_MS) {
-            // Deep sleep
-            terminateEncoder();
-            esp_sleep_enable_timer_wakeup(DEEP_SLEEP_WAKE_INTERVAL_MS * 1000);
-            esp_deep_sleep_start();
-            return;
-        }
-        
-        // Light sleep
-        esp_sleep_enable_timer_wakeup(LIGHT_SLEEP_WAKE_INTERVAL_MS * 1000);
-        esp_light_sleep_start();
-        
-        // Wake up
-        float newAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-        angleDifference = newAngle - lastInactiveAngle;
-
-        if (angleDifference > 180) {
-            angleDifference = 360 - angleDifference;
-        }
-        
-        lastInactiveAngle = newAngle;
-        
-    } while (angleDifference < ROTATION_CHANGE_THRESHOLD_DEGREES);
-    
-    #if LOGGING_ON
-        Serial.begin(SERIAL_SPEED);
-        delay(1000);
-        Serial.println("Info: Movement detected, resuming full power");
-    #endif
-
-    initializeBluetooth();
-    
-    // Reset BLE connection management state after wake-up
-    lastBleConnectionCheckTimeMs = millis();
-    lastSuccessfulBleConnectionTimeMs = millis();
-    justWokeFromSleep = true;  // Flag to enable aggressive BLE reconnection
-    wakeUpTimeMs = millis();   // Track when we woke up
-    
-    previousEncoderAngle = lastInactiveAngle;
     rtcLastRotationAngle = previousEncoderAngle;
-    lastActivityTimeMs = millis();
+    
+    esp_sleep_enable_timer_wakeup(DEEP_SLEEP_WAKE_INTERVAL_MS * 1000);
+    esp_deep_sleep_start();
 }
 
 void checkRotationAfterWakeup() {
@@ -391,20 +328,9 @@ void loop() {
         processEncoderScrolling(currentTimeMs);
     }
     
-    // More frequent BLE checks right after waking from sleep
-    unsigned long bleCheckInterval = justWokeFromSleep ? 500 : BLE_CONNECTION_CHECK_INTERVAL_MS;
-    if (currentTimeMs - lastBleConnectionCheckTimeMs >= bleCheckInterval) {
+    if (currentTimeMs - lastBleConnectionCheckTimeMs >= BLE_CONNECTION_CHECK_INTERVAL_MS) {
         lastBleConnectionCheckTimeMs = currentTimeMs;
         handleBleConnectionManagement(currentTimeMs);
-    }
-    
-    // Reset aggressive reconnection flag after 30 seconds if not connected
-    if (justWokeFromSleep && (currentTimeMs - wakeUpTimeMs > 30000)) {
-        justWokeFromSleep = false;
-        
-        #if LOGGING_ON
-            Serial.println("Info: Stopping aggressive BLE reconnection attempts");
-        #endif
     }
 
     if( currentTimeMs - lastSuccessfulBleConnectionTimeMs >= BATTERY_CHECK_INTERVAL_MS) {
