@@ -8,13 +8,13 @@
 #define LOGGING_ON false
 
 // Sleep and Power Management Settings
-const unsigned long DEEP_SLEEP_TIMEOUT_MS = 60 * 1000;
+const unsigned long DEEP_SLEEP_TIMEOUT_MS = 120 * 1000;
 const unsigned long DEEP_SLEEP_WAKE_INTERVAL_MS = 3 * 1000;
 const float ROTATION_CHANGE_THRESHOLD_DEGREES = 3.0;
 
 // Device Configuration
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
-const float DEGREES_PER_SCROLL_STEP = -9.0;
+const float DEGREES_PER_SCROLL_STEP = -360.0 / 4096.0 * 128.0;
 const float BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0;
 const float BATTERY_LOW_VOLTAGE = 3.0;
 const float BATTERY_HIGH_VOLTAGE = 4.2;
@@ -48,7 +48,12 @@ bool isAdvertising = false;
 
 
 #if LOGGING_ON
-void reportDeviceStatus() {
+void reportDeviceStatus(unsigned long currentTimeMs) {
+    if (currentTimeMs - lastStatusReportTimeMs < STATUS_REPORT_INTERVAL_MS)
+        return;
+    
+    lastStatusReportTimeMs = currentTimeMs;
+    
     Serial.print(" | ");
     Serial.print(bleMouse.isConnected() ? "BLE: ON" : "BLE: OFF");
     
@@ -121,6 +126,11 @@ void terminateBluetooth() {
 }
 
 void handleBleConnectionManagement(unsigned long currentTimeMs) {
+    if (currentTimeMs - lastBleConnectionCheckTimeMs < BLE_CONNECTION_CHECK_INTERVAL_MS)
+        return;
+    
+    lastBleConnectionCheckTimeMs = currentTimeMs;
+    
     bool isCurrentlyConnected = bleMouse.isConnected();
     
     if (!isCurrentlyConnected) {
@@ -196,6 +206,11 @@ void terminateEncoder(){
 // ========================================
 
 void processEncoderScrolling(unsigned long currentTimeMs) {
+    if (currentTimeMs - lastEncoderReadTimeMs < ENCODER_READ_INTERVAL_MS || !isEncoderInitialized)
+        return;
+    
+    lastEncoderReadTimeMs = currentTimeMs;
+    
     currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
     float angleDifferenceInDegrees = currentEncoderAngle - previousEncoderAngle;
 
@@ -283,6 +298,11 @@ void checkRotationAfterWakeup() {
 
 void checkBatteryStatus(unsigned long currentTimeMs)
 {
+    if (currentTimeMs - lastSuccessfulBleConnectionTimeMs < BATTERY_CHECK_INTERVAL_MS)
+        return;
+    
+    lastSuccessfulBleConnectionTimeMs = currentTimeMs;
+    
     uint8_t batteryLevel = currentTimeMs % 100; // Simulated battery level
 
     if(bleMouse.isConnected())
@@ -316,29 +336,14 @@ void loop() {
     unsigned long currentTimeMs = millis();
 
     #if LOGGING_ON
-        if (currentTimeMs - lastStatusReportTimeMs >= STATUS_REPORT_INTERVAL_MS) {
-            lastStatusReportTimeMs = currentTimeMs;
-            reportDeviceStatus();
-        }
+        reportDeviceStatus(currentTimeMs);
         //Log2DGraph();
     #endif
 
-    if (currentTimeMs - lastEncoderReadTimeMs >= ENCODER_READ_INTERVAL_MS && isEncoderInitialized) {
-        lastEncoderReadTimeMs = currentTimeMs;
-        processEncoderScrolling(currentTimeMs);
-    }
-    
-    if (currentTimeMs - lastBleConnectionCheckTimeMs >= BLE_CONNECTION_CHECK_INTERVAL_MS) {
-        lastBleConnectionCheckTimeMs = currentTimeMs;
-        handleBleConnectionManagement(currentTimeMs);
-    }
-
-    if( currentTimeMs - lastSuccessfulBleConnectionTimeMs >= BATTERY_CHECK_INTERVAL_MS) {
-        lastSuccessfulBleConnectionTimeMs = currentTimeMs;
-        checkBatteryStatus(currentTimeMs);
-    }
-    
+    processEncoderScrolling(currentTimeMs);
+    handleBleConnectionManagement(currentTimeMs);
+    checkBatteryStatus(currentTimeMs);
     handleInactivityBasedSleep(currentTimeMs);
 
-    delay(ENCODER_READ_INTERVAL_MS);
+    delay(1);
 }
