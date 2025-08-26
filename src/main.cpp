@@ -345,5 +345,5 @@ void loop() {
     checkBatteryStatus(currentTimeMs);
     handleInactivityBasedSleep(currentTimeMs);
 
-    delay(1);
+    delay(ENCODER_READ_INTERVAL_MS);
 }
