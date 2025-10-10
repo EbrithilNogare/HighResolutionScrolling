@@ -36,7 +36,7 @@ Connect the AS5600 to your ESP32-C3 as follows:
 1. **Build and Upload**:
 
    ```bash
-   pio run --target upload --target monitor
+   pio run --target upload
    ```
 
 2. **Pairing**:
