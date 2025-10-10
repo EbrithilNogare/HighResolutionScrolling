@@ -11,8 +11,7 @@ An ESP32-C3 based Bluetooth mouse that uses an AS5600 magnetic encoder for high-
   - **Magnetic Encoder**: [AS5600 Module](https://www.aliexpress.com/item/1005009122468349.html)
 - Optional parts that I used
   - [Brass weight (2mm thick, 45mm diameter)](https://www.aliexpress.com/item/1005007804047419.html)
-  - [Ball bearing v1 45x58x7mm (and cleaned brass)](https://www.aliexpress.com/item/1005007420073930.html)
-  - [Ceramic ball bearing v2 45x58x7mm](https://www.aliexpress.com/item/32437944825.html)
+  - [Ball bearing v1 45x58x7mm (and cleaned brass)](https://www.aliexpress.com/item/1005007420073930.html) OR [Ceramic ball bearing v2 45x58x7mm](https://www.aliexpress.com/item/32437944825.html)
   - [LiPo battery (503040, 3.7 V ~500mAh)](https://www.aliexpress.com/item/1005008218024646.html)
   - [Thermal pad .5 mm](https://www.aliexpress.com/item/32988894487.html)
   - [Rubber legs](https://www.aliexpress.com/item/1005002478823169.html)
