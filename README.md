@@ -61,3 +61,7 @@ You can adjust the following parameters in `main.cpp`:
 
 - modified [ESP32-BLE-Mouse](https://github.com/T-vK/ESP32-BLE-Mouse): For Bluetooth HID mouse functionality
 - [AS5600](https://github.com/RobTillaart/AS5600): For magnetic encoder communication
+
+## Other helpfull stuff
+
+[Scrolling vizualizer](https://ebrithilnogare.github.io/HighResolutionScrolling/debugger.html)
