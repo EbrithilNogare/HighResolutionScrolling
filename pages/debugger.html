@@ -1,0 +1,454 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+	<meta charset="utf-8" />
+	<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+	<title>Scroll Capture (diff, total, time-based graph)</title>
+	<style>
+		:root {
+			--bg: #0b0d10;
+			--fg: #e7eef7;
+			--muted: #8aa0b4;
+			--accent: #7bdcff;
+		}
+
+		* {
+			box-sizing: border-box;
+		}
+
+		html,
+		body {
+			height: 100%;
+		}
+
+		body {
+			margin: 0;
+			background: var(--bg);
+			color: var(--fg);
+			font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, "Helvetica Neue", Arial, "Noto Sans";
+			/* Do not let the page scroll */
+			overflow: hidden;
+			touch-action: none;
+			/* we'll handle touch panning ourselves */
+		}
+
+		.wrap {
+			height: 100%;
+			display: grid;
+			grid-template-rows: auto auto 1fr;
+			gap: 10px;
+			padding: 12px clamp(12px, 3vw, 24px);
+		}
+
+		.row {
+			display: grid;
+			align-items: center;
+			justify-items: center;
+			text-align: center;
+			border: 1px solid #1b2430;
+			border-radius: 12px;
+			padding: 14px;
+			background: #0f1318;
+			box-shadow: 0 0 0 1px #0e151f inset, 0 8px 20px rgba(0, 0, 0, .25);
+		}
+
+		.kpi {
+			font-weight: 700;
+			line-height: 1.1;
+		}
+
+		.kpi .label {
+			display: block;
+			font-size: clamp(12px, 1.8vw, 14px);
+			color: var(--muted);
+			letter-spacing: .06em;
+			text-transform: uppercase;
+			margin-bottom: 6px;
+		}
+
+		.kpi .value {
+			font-size: clamp(28px, 7vw, 56px);
+		}
+
+		.kpi small {
+			font-size: .45em;
+			color: var(--muted);
+			font-weight: 500;
+		}
+
+		.controls {
+			position: fixed;
+			right: 12px;
+			bottom: 12px;
+			display: flex;
+			gap: 8px;
+			z-index: 2;
+		}
+
+		button {
+			appearance: none;
+			border: 1px solid #1b2430;
+			background: #121920;
+			color: var(--fg);
+			padding: 8px 12px;
+			border-radius: 10px;
+			font-weight: 600;
+			cursor: pointer;
+		}
+
+		button:hover {
+			background: #16212b;
+		}
+
+		canvas {
+			width: 100%;
+			height: 100%;
+			display: block;
+			border-radius: 10px;
+			background: linear-gradient(180deg, #0b0f14, #0a1016);
+		}
+
+		.hint {
+			position: fixed;
+			left: 12px;
+			bottom: 12px;
+			color: var(--muted);
+			font-size: 12px;
+			user-select: none;
+			opacity: .8;
+		}
+
+		.hl {
+			color: var(--accent);
+		}
+	</style>
+</head>
+
+<body>
+	<div class="wrap" id="app">
+		<div class="row kpi">
+			<span class="label">Total scroll (px)</span>
+			<span class="value"><span id="total">0</span><small> px</small></span>
+		</div>
+
+		<div class="row kpi">
+			<span class="label">Current diff since last frame (px)</span>
+			<span class="value"><span id="diff">0</span><small> px</small></span>
+		</div>
+
+		<div class="row" style="min-height: 40vh; padding: 0;">
+			<canvas id="chart" aria-label="History of scroll diff"></canvas>
+		</div>
+	</div>
+
+	<div class="controls">
+		<button id="reset">Reset</button>
+		<button id="freeze">Freeze Graph</button>
+	</div>
+	<div class="hint">
+		Wheel / swipe to “scroll”. Page itself won’t move.<br />
+		<span class="hl">Desktop:</span> wheel/trackpad, ↑/↓, PgUp/PgDn • <span class="hl">Mobile:</span> drag up/down
+	</div>
+
+	<script>
+		(function () {
+			// --- State ---
+			let total = 0;              // total accumulated vertical pixels
+			let currentFrameDelta = 0;  // delta accumulated since last animation frame
+			let lastDiff = 0;           // diff that was pushed on last frame (what we display)
+			let history = [];           // rolling frame-by-frame diffs for the graph
+			let maxPoints = 600;        // will adapt to canvas width
+			let frozen = false;         // freeze graph rendering
+
+			// Touch tracking
+			let touchActive = false;
+			let lastTouchY = 0;
+
+			// DOM
+			const totalEl = document.getElementById('total');
+			const diffEl = document.getElementById('diff');
+			const canvas = document.getElementById('chart');
+			const ctx = canvas.getContext('2d', { alpha: true });
+			const resetBtn = document.getElementById('reset');
+			const freezeBtn = document.getElementById('freeze');
+
+			// Size & DPR handling
+			function resizeCanvasToDisplaySize() {
+				const rect = canvas.getBoundingClientRect();
+				const dpr = Math.max(1, window.devicePixelRatio || 1);
+				const w = Math.floor(rect.width * dpr);
+				const h = Math.floor(rect.height * dpr);
+				if (canvas.width !== w || canvas.height !== h) {
+					canvas.width = w;
+					canvas.height = h;
+				}
+				ctx.setTransform(1, 0, 0, 1, 0, 0);
+				ctx.scale(dpr, dpr);
+				// Also update maxPoints based on current CSS pixel width (not DPR)
+				maxPoints = Math.max(120, Math.floor(rect.width)); // ~1 point per CSS px
+			}
+
+			function clampHistory() {
+				if (history.length > maxPoints) history = history.slice(history.length - maxPoints);
+			}
+
+			function updateNumbers() {
+				// Show integers for readability; lastDiff is set each frame
+				totalEl.textContent = total.toFixed(0);
+				diffEl.textContent = lastDiff.toFixed(0);
+			}
+
+			// --- Graph ---
+			function drawGraph() {
+				const rect = canvas.getBoundingClientRect();
+				const W = rect.width;
+				const H = rect.height;
+
+				// Clear
+				ctx.clearRect(0, 0, W, H);
+
+				// Baseline if nothing drawn yet
+				if (history.length === 0) {
+					drawBaseline(W, H);
+					return;
+				}
+
+				// Determine vertical scale: map max |diff| to 40% of half-height (leaves headroom)
+				const maxAbs = Math.max(5, ...history.map(v => Math.abs(v))); // avoid zero
+				const halfH = H / 2;
+				const scaleY = (halfH * 0.8) / maxAbs; // 80% headroom
+				const zeroY = Math.floor(halfH) + 0.5;
+
+				// Grid
+				drawGrid(W, H, zeroY);
+
+				// Path for history (line)
+				ctx.lineWidth = 2;
+				ctx.strokeStyle = '#7bdcff';
+				ctx.beginPath();
+
+				// right-aligned: newest at the right edge
+				const n = history.length;
+				const stepX = (W - 20) / Math.max(1, maxPoints - 1); // padding 10px each side
+				let xStart = W - 10 - stepX * (n - 1);
+
+				for (let i = 0; i < n; i++) {
+					const x = xStart + i * stepX;
+					const y = zeroY - (history[i] * scaleY);
+					if (i === 0) ctx.moveTo(x, y);
+					else ctx.lineTo(x, y);
+				}
+				ctx.stroke();
+
+				// Fill under curve
+				ctx.lineTo(W - 10, zeroY);
+				ctx.lineTo(xStart, zeroY);
+				ctx.closePath();
+				const grad = ctx.createLinearGradient(0, 0, 0, H);
+				grad.addColorStop(0, 'rgba(123,220,255,0.15)');
+				grad.addColorStop(1, 'rgba(123,220,255,0.00)');
+				ctx.fillStyle = grad;
+				ctx.fill();
+
+				// Zero axis
+				ctx.strokeStyle = '#253041';
+				ctx.lineWidth = 1;
+				ctx.beginPath();
+				ctx.moveTo(0, zeroY);
+				ctx.lineTo(W, zeroY);
+				ctx.stroke();
+
+				drawBadge(W, 10, `±${Math.ceil(maxAbs)} px range`);
+			}
+
+			function drawBaseline(W, H) {
+				ctx.fillStyle = '#10161d';
+				ctx.fillRect(0, 0, W, H);
+				ctx.strokeStyle = '#253041';
+				ctx.lineWidth = 1;
+				ctx.beginPath();
+				const mid = Math.floor(H / 2) + 0.5;
+				ctx.moveTo(0, mid);
+				ctx.lineTo(W, mid);
+				ctx.stroke();
+				drawBadge(W, 10, 'No data yet');
+			}
+
+			function drawGrid(W, H, zeroY) {
+				ctx.strokeStyle = '#14202c';
+				ctx.lineWidth = 1;
+				ctx.beginPath();
+				const step = Math.max(40, Math.floor(H / 6));
+				for (let y = zeroY; y >= 0; y -= step) {
+					ctx.moveTo(0.5, y + 0.5);
+					ctx.lineTo(W + 0.5, y + 0.5);
+				}
+				for (let y = zeroY; y <= H; y += step) {
+					ctx.moveTo(0.5, y + 0.5);
+					ctx.lineTo(W + 0.5, y + 0.5);
+				}
+				ctx.stroke();
+			}
+
+			function drawBadge(W, padding, text) {
+				ctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Arial';
+				const tw = Math.ceil(ctx.measureText(text).width);
+				const th = 18;
+				const x = W - padding - tw - 12; // 12px inner padding
+				const y = padding;
+
+				ctx.fillStyle = 'rgba(20,30,40,0.9)';
+				ctx.strokeStyle = '#1b2430';
+				ctx.lineWidth = 1;
+				roundRect(ctx, x, y, tw + 24, th + 10, 8, true, true);
+
+				ctx.fillStyle = '#9db2c7';
+				ctx.fillText(text, x + 12, y + th);
+			}
+
+			function roundRect(ctx, x, y, w, h, r, fill, stroke) {
+				if (w < 2 * r) r = w / 2;
+				if (h < 2 * r) r = h / 2;
+				ctx.beginPath();
+				ctx.moveTo(x + r, y);
+				ctx.arcTo(x + w, y, x + w, y + h, r);
+				ctx.arcTo(x + w, y + h, x, y + h, r);
+				ctx.arcTo(x, y + h, x, y, r);
+				ctx.arcTo(x, y, x + w, y, r);
+				ctx.closePath();
+				if (fill) ctx.fill();
+				if (stroke) ctx.stroke();
+			}
+
+			// --- Input handling ---
+			// Wheel / trackpad
+			window.addEventListener('wheel', (e) => {
+				e.preventDefault(); // don't let the page scroll
+				const dy = normalizeWheelDelta(e);
+				if (!Number.isFinite(dy)) return;
+				accumulate(dy);
+			}, { passive: false });
+
+			// Touch (phones/tablets)
+			window.addEventListener('touchstart', (e) => {
+				if (e.touches.length > 0) {
+					touchActive = true;
+					lastTouchY = e.touches[0].clientY;
+				}
+			}, { passive: true });
+
+			window.addEventListener('touchmove', (e) => {
+				if (!touchActive) return;
+				if (e.touches.length > 0) {
+					const y = e.touches[0].clientY;
+					const dy = (lastTouchY - y); // swipe up -> positive dy (like wheel deltaY)
+					lastTouchY = y;
+					e.preventDefault(); // block page scroll / pull-to-refresh
+					accumulate(dy);
+				}
+			}, { passive: false });
+
+			window.addEventListener('touchend', () => {
+				touchActive = false;
+			}, { passive: true });
+
+			// Keyboard (arrows / PgUp/PgDn / space)
+			window.addEventListener('keydown', (e) => {
+				let dy = 0;
+				const line = 40;                 // typical line height in px
+				const page = window.innerHeight * 0.9;
+
+				switch (e.key) {
+					case 'ArrowUp': dy = -line; break;
+					case 'ArrowDown': dy = line; break;
+					case 'PageUp': dy = -page; break;
+					case 'PageDown': dy = page; break;
+					case 'Home': dy = -page * 2; break;
+					case 'End': dy = page * 2; break;
+					case ' ':
+						dy = e.shiftKey ? -page : page;
+						break;
+					default: return; // let other keys pass
+				}
+				e.preventDefault();
+				accumulate(dy);
+			}, { passive: false });
+
+			function normalizeWheelDelta(e) {
+				// Unify to CSS pixel units (best-effort).
+				if (e.deltaMode === 0) return e.deltaY;               // pixels
+				if (e.deltaMode === 1) return e.deltaY * 40;          // lines → pixels
+				if (e.deltaMode === 2) return e.deltaY * window.innerHeight * 0.9; // pages → pixels
+				return e.deltaY;
+			}
+
+			// Accumulate into this frame; graph advances on rAF so middle number becomes 0 when there's no movement
+			function accumulate(dy) {
+				currentFrameDelta += dy;
+				total += dy;
+			}
+
+			// Controls
+			resetBtn.addEventListener('click', () => {
+				total = 0;
+				currentFrameDelta = 0;
+				lastDiff = 0;
+				history = [];
+				updateNumbers();
+				if (!frozen) drawGraph();
+			});
+
+			freezeBtn.addEventListener('click', () => {
+				frozen = !frozen;
+				freezeBtn.textContent = frozen ? 'Unfreeze Graph' : 'Freeze Graph';
+				if (!frozen) { updateNumbers(); drawGraph(); }
+			});
+
+			// Resize observer keeps canvas crisp on rotate / resize
+			const ro = new ResizeObserver(() => {
+				resizeCanvasToDisplaySize();
+				if (!frozen) drawGraph();
+			});
+			ro.observe(canvas);
+
+			// --- Animation loop (ties to display's refresh rate) ---
+			function tick() {
+				// Push the diff measured since previous frame (could be 0)
+				lastDiff = currentFrameDelta;     // what we show as "current diff"
+				history.push(lastDiff);
+				clampHistory();
+
+				// After pushing, reset so next frame shows 0 unless new input arrives
+				currentFrameDelta = 0;
+
+				// Update UI & draw
+				updateNumbers();
+				if (!frozen) drawGraph();
+
+				requestAnimationFrame(tick);
+			}
+
+			// Initial
+			resizeCanvasToDisplaySize();
+			updateNumbers();
+			drawGraph();
+			requestAnimationFrame(tick);
+
+			// Prevent iOS Safari rubber-band / overscroll bounce
+			document.addEventListener('gesturestart', (e) => e.preventDefault());
+
+			// Optional: keep screen awake on mobile while interacting (best-effort; not all browsers support)
+			if ('wakeLock' in navigator) {
+				let lock = null;
+				const requestLock = async () => { try { lock = await navigator.wakeLock.request('screen'); } catch { } };
+				document.addEventListener('visibilitychange', () => {
+					if (document.visibilityState === 'visible' && lock === null) requestLock();
+				});
+				requestLock();
+			}
+		})();
+	</script>
+</body>
+
+</html>
