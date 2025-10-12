@@ -20,10 +20,8 @@ const float BATTERY_LOW_VOLTAGE = 3.0;
 const float BATTERY_HIGH_VOLTAGE = 4.2;
 const int SERIAL_SPEED = 115200;
 const int ENCODER_POWER_PIN = 20;
-const int ENCODER_SCL_PIN = 4;
 
 // Operation Intervals
-const unsigned long STATUS_REPORT_INTERVAL_MS = 1000;
 const unsigned long ENCODER_READ_INTERVAL_MS = 15; // BLE interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
 const unsigned long BATTERY_CHECK_INTERVAL_MS = 60 * 1000;
@@ -48,42 +46,6 @@ bool isAdvertising = false;
 
 
 #if LOGGING_ON
-void reportDeviceStatus(unsigned long currentTimeMs) {
-    if (currentTimeMs - lastStatusReportTimeMs < STATUS_REPORT_INTERVAL_MS)
-        return;
-    
-    lastStatusReportTimeMs = currentTimeMs;
-    
-    Serial.print(" | ");
-    Serial.print(bleMouse.isConnected() ? "BLE: ON" : "BLE: OFF");
-    
-    float temperatureCelsius = 0;
-    temp_sensor_read_celsius(&temperatureCelsius);
-    Serial.print(" | ");
-    Serial.print(temperatureCelsius);    
-    Serial.print("°C");
-
-    if (isEncoderInitialized) {
-        currentEncoderAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
-        Serial.print(" | Encoder: ");
-        Serial.print(currentEncoderAngle, 1);
-        Serial.print("° | Magnet: ");
-        Serial.print(as5600.detectMagnet() ? "YES" : " NO");
-    } else {
-        Serial.print(" | Encoder: OFF");
-    }
-
-    Serial.println();
-}
-
-void Log2DGraph()
-{
-    Serial.print('#');
-    Serial.print(as5600.readAngle() * AS5600_RAW_TO_DEGREES);
-    Serial.print(' ');
-    Serial.println(as5600.readMagnitude());
-}
-
 void initializeSerialCommunication() {
     Serial.begin(SERIAL_SPEED);
     delay(1000);
@@ -97,10 +59,6 @@ void initializeTemperatureSensor() {
     temperatureSensorConfig.dac_offset = TSENS_DAC_L2;
     temp_sensor_set_config(temperatureSensorConfig);
     temp_sensor_start();
-
-    #if LOGGING_ON
-        Serial.println("✓ Temperature sensor initialized");
-    #endif
 }
 
 // ========================================
@@ -113,10 +71,6 @@ void initializeBluetooth() {
     isAdvertising = true;
     lastSuccessfulBleConnectionTimeMs = millis();
     lastBleConnectionCheckTimeMs = millis();
-
-    #if LOGGING_ON
-        Serial.println("✓ BLE Mouse service started");
-    #endif
 }
 
 void terminateBluetooth() {
@@ -138,18 +92,10 @@ void handleBleConnectionManagement(unsigned long currentTimeMs) {
         delay(100);
         bleMouse.begin();
         isAdvertising = true;
-
-        #if LOGGING_ON
-            Serial.println("Info: Starting BLE advertising");
-        #endif
     }
 
     if(isCurrentlyConnected && isAdvertising) {
         isAdvertising = false;
-        
-        #if LOGGING_ON
-           Serial.println("Info: BLE connection established");
-        #endif
     }
 }
 
@@ -180,13 +126,6 @@ void initializeEncoder() {
             previousEncoderAngle = rtcLastRotationAngle;
         }
     }
-
-    #if LOGGING_ON
-        if(as5600.isConnected())
-            Serial.println("✓ AS5600 magnetic encoder connected successfully");
-        else
-            Serial.println("Error: AS5600 sensor not found!");
-    #endif
 }
 
 void terminateEncoder(){
@@ -194,10 +133,6 @@ void terminateEncoder(){
         isEncoderInitialized = false;
         Wire.end();
         digitalWrite(ENCODER_POWER_PIN, LOW); // power OFF
-        
-        #if LOGGING_ON
-            Serial.println("✓ AS5600 magnetic encoder terminated");
-        #endif
     }
 }
 
@@ -234,11 +169,6 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
 
         if(bleMouse.isConnected()){
             bleMouse.scroll(scrollSteps);
-            
-            #if LOGGING_ON
-            Serial.print("Info: Scroll command sent: ");
-            Serial.println(scrollSteps);
-            #endif
         }
     }
 }
@@ -250,13 +180,8 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
 void handleInactivityBasedSleep(unsigned long currentTimeMs) {
     if (currentTimeMs - lastActivityTimeMs < DEEP_SLEEP_TIMEOUT_MS)
         return;
-    
-    #if LOGGING_ON
-        Serial.println("Info: Entering deep sleep");
-        Serial.flush();
-        Serial.end();
-    #endif
 
+    // Entering deep sleep
     terminateBluetooth();
     terminateEncoder();
     
@@ -266,11 +191,7 @@ void handleInactivityBasedSleep(unsigned long currentTimeMs) {
     esp_deep_sleep_start();
 }
 
-void checkRotationAfterWakeup() {
-    #if LOGGING_ON
-        Serial.println("Info: Waking up to check rotation");
-    #endif
-    
+void checkRotationAfterWakeup() {    
     if (as5600.isConnected()) {
         float currentAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
         float savedAngle = rtcLastRotationAngle;
@@ -334,11 +255,6 @@ void setup() {
 
 void loop() {
     unsigned long currentTimeMs = millis();
-
-    #if LOGGING_ON
-        reportDeviceStatus(currentTimeMs);
-        //Log2DGraph();
-    #endif
 
     processEncoderScrolling(currentTimeMs);
     handleBleConnectionManagement(currentTimeMs);
