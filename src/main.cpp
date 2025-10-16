@@ -10,7 +10,7 @@
 // Sleep and Power Management Settings
 const unsigned long DEEP_SLEEP_TIMEOUT_MS = 120 * 1000;
 const unsigned long DEEP_SLEEP_WAKE_INTERVAL_MS = 3 * 1000;
-const float ROTATION_CHANGE_THRESHOLD_DEGREES = 3.0;
+const float ROTATION_CHANGE_THRESHOLD_DEGREES = 10.0;
 
 // Device Configuration
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
@@ -196,10 +196,6 @@ void checkRotationAfterWakeup() {
         float currentAngle = as5600.readAngle() * AS5600_RAW_TO_DEGREES;
         float savedAngle = rtcLastRotationAngle;
         float angleDifference = abs(currentAngle - savedAngle);
-        
-        if (angleDifference > 180) {
-            angleDifference = 360 - angleDifference;
-        }
         
         if (angleDifference >= ROTATION_CHANGE_THRESHOLD_DEGREES) {
             previousEncoderAngle = currentAngle;
