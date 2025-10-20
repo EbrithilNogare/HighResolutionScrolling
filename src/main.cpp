@@ -15,16 +15,18 @@ const float ROTATION_CHANGE_THRESHOLD_DEGREES = 10.0;
 // Device Configuration
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
 const float DEGREES_PER_SCROLL_STEP = -360.0 / 4096.0 * 128.0;
-const float BATTERY_VOLTAGE_DIVIDER_RATIO = 2.0;
-const float BATTERY_LOW_VOLTAGE = 3.0;
+const float BATTERY_LOW_VOLTAGE = 3.3;
 const float BATTERY_HIGH_VOLTAGE = 4.2;
 const int SERIAL_SPEED = 115200;
 const int ENCODER_POWER_PIN = 20;
+const int BATTERY_PIN = 4;
+const float VOLTAGE_DIVIDER_RESISTOR_VALUE_LIVE = 217.4; // Measure this!
+const float VOLTAGE_DIVIDER_RESISTOR_VALUE_GROUND = 221.7; // Measure this!
 
 // Operation Intervals
 const unsigned long ENCODER_READ_INTERVAL_MS = 15; // BLE interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
-const unsigned long BATTERY_CHECK_INTERVAL_MS = 60 * 1000;
+const unsigned long BATTERY_CHECK_INTERVAL_MS = 300 * 1000;
 
 // Global Objects
 BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare", 69);
@@ -177,6 +179,12 @@ void processEncoderScrolling(unsigned long currentTimeMs) {
 // Power Management Functions
 // ========================================
 
+void initBatteryReader() {
+    analogReadResolution(12); // 12-bit resolution (0-4095)
+    analogSetAttenuation(ADC_11db); // Set attenuation for 0-3.3V range
+    pinMode(BATTERY_PIN, INPUT);
+}
+
 void handleInactivityBasedSleep(unsigned long currentTimeMs) {
     if (currentTimeMs - lastActivityTimeMs < DEEP_SLEEP_TIMEOUT_MS)
         return;
@@ -220,10 +228,27 @@ void checkBatteryStatus(unsigned long currentTimeMs)
     
     lastSuccessfulBleConnectionTimeMs = currentTimeMs;
     
-    uint8_t batteryLevel = currentTimeMs % 100; // Simulated battery level
+    const float numReadings = 32;
+    
+    uint32_t batteryVoltageSum = 0;
+    
+    for (int i = 0; i < numReadings; i++)
+        batteryVoltageSum += analogReadMilliVolts(BATTERY_PIN);
+    
+    float voltageDividerCorrection = (VOLTAGE_DIVIDER_RESISTOR_VALUE_GROUND + VOLTAGE_DIVIDER_RESISTOR_VALUE_LIVE) / VOLTAGE_DIVIDER_RESISTOR_VALUE_GROUND;
+    float batteryVoltage = (batteryVoltageSum / numReadings / 1000.0f) * voltageDividerCorrection;
+    float batteryPercentage = ((batteryVoltage - BATTERY_LOW_VOLTAGE) / (BATTERY_HIGH_VOLTAGE - BATTERY_LOW_VOLTAGE)) * 100.0;
+
+    #if LOGGING_ON
+            Serial.print("Battery voltage: ");
+            Serial.print(batteryVoltage, 2);
+            Serial.print("V (");
+            Serial.print(batteryPercentage, 1);
+            Serial.println("%)");
+    #endif
 
     if(bleMouse.isConnected())
-        bleMouse.setBatteryLevel(batteryLevel);
+        bleMouse.setBatteryLevel(constrain(batteryPercentage, 0.0f, 100.0f));
 }
 
 // ========================================
@@ -243,11 +268,14 @@ void setup() {
         // If we reach here, powering up
     }
     
+    initBatteryReader();
     initializeTemperatureSensor();
     initializeBluetooth();
     
     lastActivityTimeMs = millis();
 }
+
+unsigned long lastHelloTimeMs = 0;
 
 void loop() {
     unsigned long currentTimeMs = millis();

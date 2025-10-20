@@ -26,7 +26,6 @@ static const uint8_t _hidReportDescriptor[] = {
   USAGE_PAGE(1),       0x01, //   USAGE_PAGE (Generic Desktop)
   USAGE(1),            0x02, //   USAGE (Mouse)
   COLLECTION(1),       0x02, //   COLLECTION (Logical)
-  REPORT_ID(1),        0x01, //     REPORT_ID (1)
   USAGE(1),            0x01, //     USAGE (Pointer)
   COLLECTION(1),       0x00, //     COLLECTION (Physical)
   // ------------------------------------------------- X/Y position
@@ -111,8 +110,8 @@ void BleMouse::taskServer(void* pvParameter) {
   
 
   bleMouseInstance->hid = new BLEHIDDevice(pServer);
-  bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(0x01); // <-- input REPORTID from report map
-  bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(0x01); // <-- feature REPORTID for resolution multiplier
+  bleMouseInstance->inputMouse = bleMouseInstance->hid->inputReport(0x00);
+  bleMouseInstance->featureResolution = bleMouseInstance->hid->featureReport(0x00); // <-- feature REPORTID for resolution multiplier
   bleMouseInstance->connectionStatus->inputMouse = bleMouseInstance->inputMouse;
   
   bleMouseInstance->featureResolution->setValue(new uint8_t{0x80}, 1);
