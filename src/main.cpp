@@ -15,21 +15,21 @@ const float ROTATION_CHANGE_THRESHOLD_DEGREES = 10.0;
 // Device Configuration
 const float SCROLL_RESOLUTION_MULTIPLIER = 128.0;
 const float DEGREES_PER_SCROLL_STEP = -360.0 / 4096.0 * 128.0;
-const float BATTERY_LOW_VOLTAGE = 3.3;
-const float BATTERY_HIGH_VOLTAGE = 4.2;
+const float BATTERY_LOW_VOLTAGE = 3300; // mV
+const float BATTERY_HIGH_VOLTAGE = 4100; // mV
 const int SERIAL_SPEED = 115200;
 const int ENCODER_POWER_PIN = 20;
 const int BATTERY_PIN = 4;
-const float VOLTAGE_DIVIDER_RESISTOR_VALUE_LIVE = 217.4; // Measure this!
-const float VOLTAGE_DIVIDER_RESISTOR_VALUE_GROUND = 221.7; // Measure this!
+const float VOLTAGE_DIVIDER_RESISTOR_VALUE_PLUS = 214000.0; // Measure this!
+const float VOLTAGE_DIVIDER_RESISTOR_VALUE_MINUS = 218000.0; // Measure this!
 
 // Operation Intervals
 const unsigned long ENCODER_READ_INTERVAL_MS = 15; // BLE interval should not be less than 7.5 ms
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
-const unsigned long BATTERY_CHECK_INTERVAL_MS = 300 * 1000;
+const unsigned long BATTERY_CHECK_INTERVAL_MS = 10 * 1000;
 
 // Global Objects
-BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare", 69);
+BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare");
 AS5600 as5600(&Wire);
 
 // RTC Memory Storage (persists during deep sleep)
@@ -39,12 +39,33 @@ RTC_DATA_ATTR float rtcLastRotationAngle = 1000.0;
 unsigned long lastStatusReportTimeMs = 0;
 unsigned long lastEncoderReadTimeMs = 0;
 unsigned long lastBleConnectionCheckTimeMs = 0;
-unsigned long lastSuccessfulBleConnectionTimeMs = 0;
+unsigned long lastSuccessfulBatteryCheckTimeMs = -BATTERY_CHECK_INTERVAL_MS + 2000;
 unsigned long lastActivityTimeMs = 0;
 float previousEncoderAngle = 0;
 float currentEncoderAngle = 0;
 bool isEncoderInitialized = false;
 bool isAdvertising = false;
+bool isCharging = false;
+float lastStableVoltage = 0.0;
+
+inline float calculateBatteryPercentageFromReading(uint32_t voltageReading) {
+    const float chargingCompensation[] = {3133.4158648303f, -1.7948035616f, 0.000257338f}; // Measure this!
+    const float dischargingCompensation[] = {1711.9522324195f, -1.0572836238f, 0.0001634147f}; // Measure this!
+
+    float voltageDividerCorrection = (VOLTAGE_DIVIDER_RESISTOR_VALUE_MINUS + VOLTAGE_DIVIDER_RESISTOR_VALUE_PLUS) / VOLTAGE_DIVIDER_RESISTOR_VALUE_MINUS;
+    float batteryVoltage = voltageReading * voltageDividerCorrection;
+    batteryVoltage = min(max(batteryVoltage, BATTERY_LOW_VOLTAGE), BATTERY_HIGH_VOLTAGE);
+
+    float batteryPercentage;
+    // Apply compensation
+    if (isCharging) {
+        batteryPercentage = chargingCompensation[0] + chargingCompensation[1] * batteryVoltage + chargingCompensation[2] * pow(batteryVoltage, 2);
+    } else {
+        batteryPercentage = dischargingCompensation[0] + dischargingCompensation[1] * batteryVoltage + dischargingCompensation[2] * pow(batteryVoltage, 2);
+    }
+
+    return batteryPercentage;
+}
 
 
 #if LOGGING_ON
@@ -71,7 +92,6 @@ void initializeBluetooth() {
     bleMouse.begin();
 
     isAdvertising = true;
-    lastSuccessfulBleConnectionTimeMs = millis();
     lastBleConnectionCheckTimeMs = millis();
 }
 
@@ -223,28 +243,45 @@ void checkRotationAfterWakeup() {
 
 void checkBatteryStatus(unsigned long currentTimeMs)
 {
-    if (currentTimeMs - lastSuccessfulBleConnectionTimeMs < BATTERY_CHECK_INTERVAL_MS)
+    if (currentTimeMs - lastSuccessfulBatterCheckTimeMs < BATTERY_CHECK_INTERVAL_MS)
         return;
     
-    lastSuccessfulBleConnectionTimeMs = currentTimeMs;
+    lastSuccessfulBatterCheckTimeMs = currentTimeMs;
     
-    const float numReadings = 32;
+    const float numReadings = 128;
     
     uint32_t batteryVoltageSum = 0;
     
     for (int i = 0; i < numReadings; i++)
         batteryVoltageSum += analogReadMilliVolts(BATTERY_PIN);
+    float batteryVoltage = batteryVoltageSum / numReadings;
     
-    float voltageDividerCorrection = (VOLTAGE_DIVIDER_RESISTOR_VALUE_GROUND + VOLTAGE_DIVIDER_RESISTOR_VALUE_LIVE) / VOLTAGE_DIVIDER_RESISTOR_VALUE_GROUND;
-    float batteryVoltage = (batteryVoltageSum / numReadings / 1000.0f) * voltageDividerCorrection;
-    float batteryPercentage = ((batteryVoltage - BATTERY_LOW_VOLTAGE) / (BATTERY_HIGH_VOLTAGE - BATTERY_LOW_VOLTAGE)) * 100.0;
+    float voltageDividerCorrection = (VOLTAGE_DIVIDER_RESISTOR_VALUE_MINUS + VOLTAGE_DIVIDER_RESISTOR_VALUE_PLUS) / VOLTAGE_DIVIDER_RESISTOR_VALUE_MINUS;
+
+    const float threshold = 5.0f; // mV
+
+    if(lastStableVoltage == 0.0){
+        lastStableVoltage = batteryVoltage;
+        isCharging = BATTERY_HIGH_VOLTAGE - (BATTERY_HIGH_VOLTAGE - BATTERY_LOW_VOLTAGE) / 5 < batteryVoltage;
+    }
+    if(isCharging && lastStableVoltage - batteryVoltage > threshold){
+        lastStableVoltage = batteryVoltage;
+        isCharging = false;
+    }
+    if(!isCharging && batteryVoltage - lastStableVoltage > threshold){
+        lastStableVoltage = batteryVoltage;
+        isCharging = true;
+    }
+
+    float batteryPercentage = calculateBatteryPercentageFromReading(batteryVoltage);
 
     #if LOGGING_ON
             Serial.print("Battery voltage: ");
-            Serial.print(batteryVoltage, 2);
-            Serial.print("V (");
+            Serial.print(batteryVoltage * voltageDividerCorrection, 0);
+            Serial.print("mV (");
             Serial.print(batteryPercentage, 1);
-            Serial.println("%)");
+            Serial.print("%) ");
+            Serial.println("Charging: " + String(isCharging ? "Yes" : "No"));
     #endif
 
     if(bleMouse.isConnected())
