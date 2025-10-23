@@ -243,10 +243,10 @@ void checkRotationAfterWakeup() {
 
 void checkBatteryStatus(unsigned long currentTimeMs)
 {
-    if (currentTimeMs - lastSuccessfulBatterCheckTimeMs < BATTERY_CHECK_INTERVAL_MS)
+    if (currentTimeMs - lastSuccessfulBatteryCheckTimeMs < BATTERY_CHECK_INTERVAL_MS)
         return;
     
-    lastSuccessfulBatterCheckTimeMs = currentTimeMs;
+    lastSuccessfulBatteryCheckTimeMs = currentTimeMs;
     
     const float numReadings = 128;
     
