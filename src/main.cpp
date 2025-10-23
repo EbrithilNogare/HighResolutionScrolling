@@ -28,18 +28,19 @@ const unsigned long ENCODER_READ_INTERVAL_MS = 15; // BLE interval should not be
 const unsigned long BLE_CONNECTION_CHECK_INTERVAL_MS = 5000;
 const unsigned long BATTERY_CHECK_INTERVAL_MS = 10 * 1000;
 
-// Global Objects
-BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare");
-AS5600 as5600(&Wire);
-
 // RTC Memory Storage (persists during deep sleep)
 RTC_DATA_ATTR float rtcLastRotationAngle = 1000.0;
+RTC_DATA_ATTR float rtcBatteryVoltage = 100.0;
+
+// Global Objects
+BleMouse bleMouse("Smooth scroller", "ESP32 - EbrithilNogare", rtcBatteryVoltage);
+AS5600 as5600(&Wire);
 
 // State Variables
 unsigned long lastStatusReportTimeMs = 0;
 unsigned long lastEncoderReadTimeMs = 0;
 unsigned long lastBleConnectionCheckTimeMs = 0;
-unsigned long lastSuccessfulBatteryCheckTimeMs = -BATTERY_CHECK_INTERVAL_MS + 2000;
+unsigned long lastSuccessfulBatteryCheckTimeMs = 0;
 unsigned long lastActivityTimeMs = 0;
 float previousEncoderAngle = 0;
 float currentEncoderAngle = 0;
@@ -284,6 +285,7 @@ void checkBatteryStatus(unsigned long currentTimeMs)
             Serial.println("Charging: " + String(isCharging ? "Yes" : "No"));
     #endif
 
+    rtcBatteryVoltage = batteryPercentage;
     if(bleMouse.isConnected())
         bleMouse.setBatteryLevel(constrain(batteryPercentage, 0.0f, 100.0f));
 }
