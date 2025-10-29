@@ -50,22 +50,42 @@ bool isCharging = false;
 float lastStableVoltage = 0.0;
 
 inline float calculateBatteryPercentageFromReading(uint32_t voltageReading) {
-    const float chargingCompensation[] = {3133.4158648303f, -1.7948035616f, 0.000257338f}; // Measure this!
-    const float dischargingCompensation[] = {1711.9522324195f, -1.0572836238f, 0.0001634147f}; // Measure this!
+    const int tableSize = 11;
+    const float chargingVoltages[tableSize] = {3545.0f, 3622.0f, 3715.0f, 3815.0f, 3876.0f, 3913.0f, 3945.0f, 3987.0f, 4035.0f, 4064.0f, 4100.0f}; // Measure this!
+    const float dischargingVoltages[tableSize] = {3102.0f, 3442.0f, 3547.0f, 3673.0f, 3736.0f, 3776.0f, 3812.0f, 3880.0f, 3925.0f, 3952.8f, 4057.0f}; // Measure this!
+    const float percentages[tableSize] = {0.0f, 10.0f, 20.0f, 30.0f, 40.0f, 50.0f, 60.0f, 70.0f, 80.0f, 90.0f, 100.0f};
 
     float voltageDividerCorrection = (VOLTAGE_DIVIDER_RESISTOR_VALUE_MINUS + VOLTAGE_DIVIDER_RESISTOR_VALUE_PLUS) / VOLTAGE_DIVIDER_RESISTOR_VALUE_MINUS;
     float batteryVoltage = voltageReading * voltageDividerCorrection;
-    batteryVoltage = min(max(batteryVoltage, BATTERY_LOW_VOLTAGE), BATTERY_HIGH_VOLTAGE);
-
-    float batteryPercentage;
-    // Apply compensation
-    if (isCharging) {
-        batteryPercentage = chargingCompensation[0] + chargingCompensation[1] * batteryVoltage + chargingCompensation[2] * pow(batteryVoltage, 2);
-    } else {
-        batteryPercentage = dischargingCompensation[0] + dischargingCompensation[1] * batteryVoltage + dischargingCompensation[2] * pow(batteryVoltage, 2);
+    
+    const float* voltageTable = isCharging ? chargingVoltages : dischargingVoltages;
+    
+    if (batteryVoltage <= voltageTable[0]) {
+        return percentages[0];
     }
-
-    return batteryPercentage;
+    if (batteryVoltage >= voltageTable[tableSize - 1]) {
+        return percentages[tableSize - 1];
+    }
+    
+    int lowerIndex = 0;
+    for (int i = 0; i < tableSize - 1; i++) {
+        if (batteryVoltage >= voltageTable[i] && batteryVoltage <= voltageTable[i + 1]) {
+            lowerIndex = i;
+            break;
+        }
+    }
+    
+    int upperIndex = lowerIndex + 1;
+    
+    // Linear interpolation between the two closest points
+    float voltage1 = voltageTable[lowerIndex];
+    float voltage2 = voltageTable[upperIndex];
+    float percentage1 = percentages[lowerIndex];
+    float percentage2 = percentages[upperIndex];
+    
+    float interpolatedPercentage = percentage1 + (batteryVoltage - voltage1) * (percentage2 - percentage1) / (voltage2 - voltage1);
+    
+    return interpolatedPercentage;
 }
 
 
