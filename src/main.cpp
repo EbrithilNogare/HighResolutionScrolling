@@ -1,7 +1,6 @@
 #include <Arduino.h>
 #include <AS5600.h>
 #include <Wire.h>
-#include "esp_sleep.h"
 #include "./BleMouse.h"
 
 #define LOGGING_ENABLED false
