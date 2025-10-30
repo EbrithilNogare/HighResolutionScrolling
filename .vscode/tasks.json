@@ -4,8 +4,16 @@
     {
       "label": "PlatformIO: Build, Upload & Monitor",
       "type": "shell",
-      "command": "pio",
-      "args": ["run", "--target", "upload", "--target", "monitor"],
+      "command": "python",
+      "args": [
+        "-m",
+        "platformio",
+        "run",
+        "--target",
+        "upload",
+        "--target",
+        "monitor"
+      ],
       "group": {
         "kind": "build",
         "isDefault": true

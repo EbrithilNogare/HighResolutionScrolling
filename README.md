@@ -39,7 +39,7 @@ Battery voltage divider connected to GPIO4 (220kΩ/220kΩ divider - calibrate in
 ## Quick Start
 
 ```bash
-pio run --target upload --target monitor
+pio run --target upload
 ```
 
 Device appears as "Smooth scroller" in Bluetooth settings. Tested and working on Windows. Other platforms may have varying compatibility.
