@@ -144,6 +144,7 @@ void initializeEncoder() {
     // Wait for first valid register value
     const unsigned long startTime = millis();
     while (as5600.isConnected() && as5600.readAngle() == 0 && millis() - startTime < 10) {
+        delay(1);
         // Waiting for encoder to initialize
     }
     
