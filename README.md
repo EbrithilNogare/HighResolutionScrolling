@@ -23,6 +23,7 @@ Ultra-smooth Bluetooth scrolling device using ESP32-C3 and AS5600 magnetic encod
 ### Optional Components
 
 - [Brass Weight 45mm](https://www.aliexpress.com/item/1005007804047419.html)
+- 2x $220\ \mathsf{k\Omega}$ resistors (for measuring battery level)
 
 ### Wiring
 
